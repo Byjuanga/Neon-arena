@@ -45,8 +45,22 @@ export const CHARACTERS = [
     url: 'assets/models/RobotExpressive.glb',
     height: 1.9,
     tint: 'Main',
-    anims: { idle: 'Idle', run: 'Running', death: 'Death', victory: 'Dance', hit: 'No' },
+    anims: {
+      idle: 'Idle', run: 'Running', death: 'Death', victory: 'Dance',
+      wave: 'Wave', dance: 'Dance', thumbs: 'ThumbsUp', yes: 'Yes', no: 'No', sit: 'Sitting',
+    },
   },
+];
+
+// Emotes con las teclas 1-6. time: segundos que dura (0 = hasta que te muevas).
+// key es el nombre de la animación en anims; si un personaje no la tiene, se queda quieto.
+export const EMOTES = [
+  { key: 'wave',   label: 'Saludar',       icon: '👋', time: 1.8 },
+  { key: 'dance',  label: 'Bailar',        icon: '🕺', time: 0 },
+  { key: 'thumbs', label: 'Pulgar arriba', icon: '👍', time: 1.6 },
+  { key: 'yes',    label: 'Sí',            icon: '✅', time: 1.7 },
+  { key: 'no',     label: 'No',            icon: '❌', time: 1.7 },
+  { key: 'sit',    label: 'Sentarse',      icon: '🪑', time: 0 },
 ];
 
 // Mapa: obstáculos simétricos (x, z = centro; w, d = tamaño; h = altura)

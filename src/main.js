@@ -2,7 +2,7 @@
 import {
   STEP, SNAP_EVERY, MAX_PLAYERS, COLORS, BOT_NAMES, DIFFICULTY, KILL_OPTIONS, HALF, BOXES, PICKUP_SPOTS,
   PICKUP_INFO, PLAYER_R, SPEED, SPEED_BOOST, DASH_SPEED, DASH_TIME, DASH_CD, FIRE_CD, BULLET_SPEED, BULLET_LIFE,
-  BULLET_R, MAX_HP, CHARACTERS,
+  BULLET_R, MAX_HP, CHARACTERS, EMOTES,
 } from './config.js';
 import { Game, moveCircle, pointBlocked, F } from './sim.js';
 import { Renderer } from './render.js';
@@ -58,6 +58,8 @@ addEventListener('keydown', e => {
   if (S.phase === 'playing' || S.phase === 'over') {
     if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') { input.dash = true; input.dashNet = true; e.preventDefault(); }
     if (e.code === 'Tab') { e.preventDefault(); renderScoreboard(); $('scoreboard').hidden = false; }
+    const em = /^(Digit|Numpad)([1-9])$/.exec(e.code);
+    if (em && +em[2] <= EMOTES.length && S.phase === 'playing' && !S.paused) { input.em = +em[2]; input.emNet = +em[2]; }
     if (e.code === 'Escape' && S.phase === 'playing') togglePause();
   }
 });
@@ -109,8 +111,8 @@ function hostTick() {
   while (acc >= STEP) {
     acc -= STEP;
     const [mx, mz] = moveVec();
-    g.setInput(S.myId, { mx, mz, a: input.aim, f: input.fire && !S.paused, d: input.dash });
-    input.dash = false;
+    g.setInput(S.myId, { mx, mz, a: input.aim, f: input.fire && !S.paused, d: input.dash, em: input.em });
+    input.dash = false; input.em = 0;
     g.step(STEP);
     stepCount++;
     if (S.mode === 'host' && stepCount % SNAP_EVERY === 0) {
@@ -137,6 +139,7 @@ function viewFromGame() {
     view.players.set(p.id, {
       id: p.id, name: p.name, color: p.color, char: r.char, x: p.x, z: p.z, aim: p.aim, hp: Math.ceil(p.hp), alive: p.alive, flags: f,
       kills: p.kills, deaths: p.deaths, dashCd: Math.max(0, p.dashCd), triple: p.triple, speed: p.speed, shield: p.shield, respawnT: p.respawnT,
+      emote: p.emote, emoteN: p.emoteN,
     });
   }
   view.bullets = g.bullets;
@@ -157,8 +160,8 @@ function onSnapshot(s) {
   G.offset = G.offset == null ? off : (off > G.offset ? G.offset + (off - G.offset) * 0.05 : off);
   const players = new Map();
   for (const a of s.p) {
-    const [id, x, z, aim, hp, alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT] = a;
-    players.set(id, { id, x, z, aim, hp, alive: !!alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT });
+    const [id, x, z, aim, hp, alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT, emote, emoteN] = a;
+    players.set(id, { id, x, z, aim, hp, alive: !!alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT, emote, emoteN });
   }
   const bullets = new Map();
   for (const [id, x, z, vx, vz, owner] of s.b) bullets.set(id, { id, x, z, vx, vz, owner });
@@ -195,7 +198,8 @@ function sendGuestInput() {
   G.lastSend = performance.now() / 1000;
   const [mx, mz] = moveVec();
   const seq = ++S.guestSeq;
-  S.hostConn.send({ t: 'in', seq, mx, mz, a: +input.aim.toFixed(3), f: input.fire && !S.paused, d: !!input.dashNet });
+  S.hostConn.send({ t: 'in', seq, mx, mz, a: +input.aim.toFixed(3), f: input.fire && !S.paused, d: !!input.dashNet, em: input.emNet || 0 });
+  input.emNet = 0;
   if (G.pred) G.hist.push({ seq, x: G.pred.x, z: G.pred.z });
   if (G.hist.length > 120) G.hist.shift();
   input.dashNet = false;
@@ -741,6 +745,8 @@ function wireMenus() {
     $(id).onchange = () => { prefs.fps = $(id).checked; $('showFps').checked = $('showFps2').checked = prefs.fps; $('fps').hidden = !prefs.fps; savePrefs(); };
   }
   $('fps').hidden = !prefs.fps;
+  $('emoteHint').innerHTML = EMOTES.map((e, i) => `<kbd>${i + 1}</kbd>${e.icon}`).join(' ');
+  $('emoteHint').title = EMOTES.map((e, i) => `${i + 1}: ${e.label}`).join(' · ');
   $('music').checked = prefs.music;
   $('music').onchange = () => { prefs.music = $('music').checked; setMusic(prefs.music); savePrefs(); };
   setVolume(prefs.volume); setMusic(prefs.music);

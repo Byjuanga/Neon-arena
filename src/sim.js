@@ -2,7 +2,7 @@
 import {
   HALF, PLAYER_R, MAX_HP, SPEED, SPEED_BOOST, DASH_SPEED, DASH_TIME, DASH_CD, FIRE_CD,
   BULLET_SPEED, BULLET_DMG, BULLET_LIFE, BULLET_R, RESPAWN_TIME, SPAWN_SHIELD, POWER_TIME,
-  PICKUP_RESPAWN, BOXES, SPAWNS, PICKUP_SPOTS, DIFFICULTY, TIME_LIMIT,
+  PICKUP_RESPAWN, BOXES, SPAWNS, PICKUP_SPOTS, DIFFICULTY, TIME_LIMIT, EMOTES,
 } from './config.js';
 
 // ---------- Geometría compartida (también la usa la predicción del cliente) ----------
@@ -88,7 +88,8 @@ export class Game {
       x: 0, z: 0, aim: 0, hp: MAX_HP, alive: false, respawnT: 0.5,
       kills: 0, deaths: 0, fireCd: 0, dashCd: 0, dashT: 0, dashX: 0, dashZ: 0,
       triple: 0, speed: 0, shield: 0, invul: 0, moving: false,
-      input: { mx: 0, mz: 0, a: 0, f: false, d: false, seq: 0 },
+      emote: 0, emoteT: 0, emoteN: 0, emoteCd: 0,
+      input: { mx: 0, mz: 0, a: 0, f: false, d: false, em: 0, seq: 0 },
       ai: bot ? { t: 0, target: null, strafe: 1, strafeT: 0, goal: null, stuckT: 0, lx: 0, lz: 0, wander: 0, fireHold: 0 } : null,
     };
     this.players.set(id, p);
@@ -110,6 +111,7 @@ export class Game {
     if (Number.isFinite(inp.a)) p.input.a = inp.a;
     p.input.f = !!inp.f;
     if (inp.d) p.input.d = true;      // el dash se mantiene hasta consumirse
+    if (Number.isInteger(inp.em) && inp.em >= 1 && inp.em <= EMOTES.length) p.input.em = inp.em;
     if (Number.isInteger(inp.seq)) p.input.seq = inp.seq;
   }
 
@@ -125,7 +127,7 @@ export class Game {
     p.x = best[0]; p.z = best[1];
     p.aim = Math.atan2(-p.x, -p.z);
     p.hp = MAX_HP; p.alive = true; p.invul = SPAWN_SHIELD;
-    p.triple = p.speed = p.shield = 0; p.dashT = 0;
+    p.triple = p.speed = p.shield = 0; p.dashT = 0; p.emote = 0;
     this.onEvent({ e: 'spawn', id: p.id, x: p.x, z: p.z });
   }
 
@@ -164,6 +166,15 @@ export class Game {
       }
       p.moving = Math.abs(vx) + Math.abs(vz) > 0.1;
       [p.x, p.z] = moveCircle(p.x, p.z, vx * dt, vz * dt, PLAYER_R);
+
+      // emotes: moverse, impulsarse o disparar los cancela; solo empiezan estando quieto
+      p.emoteCd -= dt;
+      if (p.emote && (p.moving || inp.f)) p.emote = 0;
+      if (p.emote && (p.emoteT -= dt) <= 0) p.emote = 0;
+      if (inp.em) {
+        if (!p.moving && !inp.f && p.emoteCd <= 0) this.startEmote(p, inp.em, EMOTES[inp.em - 1].time || Infinity);
+        inp.em = 0;
+      }
 
       // disparo
       if (inp.f && p.fireCd <= 0) {
@@ -218,16 +229,26 @@ export class Game {
     if (this.time >= this.timeLimit) this.finish();
   }
 
+  startEmote(p, em, time) {
+    p.emote = em; p.emoteT = time; p.emoteN++; p.emoteCd = 0.4;
+  }
+
   damage(p, b) {
     if (p.invul > 0) { this.onEvent({ e: 'block', id: p.id, x: b.x, z: b.z }); return; }
     const dmg = p.shield > 0 ? BULLET_DMG * 0.4 : BULLET_DMG;
     p.hp -= dmg;
     this.onEvent({ e: 'hit', id: p.id, by: b.owner, x: b.x, z: b.z, c: b.color });
-    if (p.ai) { p.ai.target = b.owner; p.ai.t = 0; }
+    if (p.ai) { p.ai.target = b.owner; p.ai.t = 0; p.ai.emoteHold = 0; }
     if (p.hp <= 0) {
-      p.hp = 0; p.alive = false; p.deaths++; p.respawnT = RESPAWN_TIME;
+      p.hp = 0; p.alive = false; p.deaths++; p.respawnT = RESPAWN_TIME; p.emote = 0;
       const k = this.players.get(b.owner);
       if (k) k.kills++;
+      // los bots a veces celebran la baja con un emote
+      if (k && k.ai && Math.random() < 0.25) {
+        const em = [1, 2, 3][Math.floor(Math.random() * 3)];
+        k.ai.emoteHold = 1.6;
+        this.startEmote(k, em, 1.6);
+      }
       this.onEvent({ e: 'kill', killer: b.owner, victim: p.id, x: p.x, z: p.z });
       if (k && k.kills >= this.killLimit) this.finish();
     }
@@ -250,6 +271,7 @@ export class Game {
   // ---------- IA ----------
   botThink(p, dt) {
     const ai = p.ai, sk = DIFFICULTY[this.difficulty] || DIFFICULTY.normal, inp = p.input;
+    if (ai.emoteHold > 0) { ai.emoteHold -= dt; inp.mx = inp.mz = 0; inp.f = false; return; }
     ai.t -= dt; ai.strafeT -= dt; ai.wander -= dt;
 
     // detectar atascos
@@ -349,7 +371,7 @@ export class Game {
       if (q.speed > 0) f |= F.SPEED;
       if (q.invul > 0) f |= F.INVUL;
       p.push([q.id, r(q.x), r(q.z), r(q.aim), Math.ceil(q.hp), q.alive ? 1 : 0, f, q.kills, q.deaths, q.input.seq,
-        r(Math.max(0, q.dashCd)), r(q.triple), r(q.speed), r(q.shield), r(Math.max(0, q.respawnT))]);
+        r(Math.max(0, q.dashCd)), r(q.triple), r(q.speed), r(q.shield), r(Math.max(0, q.respawnT)), q.emote, q.emoteN]);
     }
     return {
       t: 's', time: r(this.time), st: this.state,

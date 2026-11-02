@@ -128,6 +128,8 @@ ul.roster li button{background:none;border:0;color:var(--muted);cursor:pointer;f
 #chatInput{pointer-events:auto;font-size:17px;padding:9px 12px;background:#070918ee;border:1px solid var(--cyan);border-radius:8px;outline:none;box-shadow:0 0 0 3px #00e5ff30}
 #chatHint{font-size:13px;color:var(--muted);opacity:.8}
 #chat.open #chatHint{display:none}
+#emoteHint{margin-left:12px}
+#emoteHint kbd{margin:0 2px 0 6px}
 .chat-title{margin-top:18px}
 .lobby-chat{display:flex;flex-direction:column;gap:8px}
 #lobbyChatLog{height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:#070918;border:1px solid var(--line);border-radius:8px;padding:8px}

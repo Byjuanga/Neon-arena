@@ -1,5 +1,13 @@
 # Historial de cambios
 
+## 1.3.0: Emotes
+
+- Emotes con las teclas 1-6: saludar, bailar, pulgar arriba, sí, no y sentarse.
+- Moverse, usar el impulso o disparar cancela el emote.
+- Bailar y sentarse duran hasta que te mueves; el resto termina solo.
+- El icono del emote aparece junto al nombre del robot.
+- Los bots a veces celebran sus bajas con un emote.
+
 ## 1.2.0: Gráficos Patata
 
 - Nueva calidad gráfica «Patata» para ordenadores antiguos sin tarjeta gráfica: menos resolución,

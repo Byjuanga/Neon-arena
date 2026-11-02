@@ -29,6 +29,7 @@ Se puede jugar **solo contra bots** o **online con hasta 8 personas**. Basta con
 - 🎨 **Gráficos 3D** con robots animados, sombras, brillo de neón y explosiones de partículas.
 - 🎵 **Música y efectos de sonido** generados en el propio navegador.
 - 💬 **Chat** en la partida (tecla T) y en la sala de espera.
+- 🕺 **Emotes** con las teclas 1-6 para saludar, bailar o vacilar.
 - 🗺️ Minimapa, lista de bajas, clasificación y avisos de racha («¡Doble eliminación!»).
 - 🥔 **Calidad gráfica ajustable**, incluido el modo «Patata» para ordenadores antiguos sin tarjeta gráfica.
 
@@ -42,6 +43,7 @@ Se puede jugar **solo contra bots** o **online con hasta 8 personas**. Basta con
 | <kbd>Espacio</kbd> o <kbd>Shift</kbd> | Impulso |
 | <kbd>Tab</kbd> | Clasificación |
 | <kbd>T</kbd> o <kbd>Enter</kbd> | Chat |
+| <kbd>1</kbd> – <kbd>6</kbd> | Emotes: saludar, bailar, pulgar arriba, sí, no y sentarse (moverte los cancela) |
 | <kbd>Esc</kbd> | Pausa y opciones |
 
 ## Cómo jugar con amigos

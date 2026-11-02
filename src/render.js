@@ -8,7 +8,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { HALF, BOXES, PICKUP_SPOTS, PICKUP_INFO, CHARACTERS, MAX_HP } from './config.js';
+import { HALF, BOXES, PICKUP_SPOTS, PICKUP_INFO, CHARACTERS, MAX_HP, EMOTES } from './config.js';
 import { F } from './sim.js';
 
 const AIM_Y = 1.1;
@@ -401,7 +401,8 @@ export class Renderer {
       const clip = THREE.AnimationClip.findByName(ch.gltf.animations, name);
       if (!clip) continue;
       const a = mixer.clipAction(clip);
-      if (k === 'death') { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; }
+      // muerte, sentarse y los gestos cortos se reproducen una vez y se quedan en la última pose
+      if (['death', 'sit'].includes(k) || EMOTES.some(e => e.key === k && e.time > 0)) { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; }
       actions[k] = a;
     }
     if (this.quality === 'patata') root.traverse(o => { if (o.isMesh) this.toLow(o); });
@@ -411,8 +412,9 @@ export class Renderer {
     return av;
   }
 
-  play(av, name, fade = 0.18) {
-    if (av.cur === name || !av.actions[name]) return;
+  play(av, name, fade = 0.18, restart = false) {
+    if (!av.actions[name]) return;
+    if (av.cur === name) { if (restart) av.actions[name].reset().play(); return; }
     const next = av.actions[name];
     const prev = av.actions[av.cur];
     next.reset().setEffectiveWeight(1).fadeIn(fade).play();
@@ -420,14 +422,16 @@ export class Renderer {
     av.cur = name;
   }
 
-  drawLabel(av, hp) {
+  drawLabel(av, hp, icon = '') {
+    av.icon = icon;
     const g = av.cv.getContext('2d');
     g.clearRect(0, 0, 256, 64);
     g.font = '700 26px Rajdhani, system-ui, sans-serif';
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.lineWidth = 5; g.strokeStyle = 'rgba(0,0,0,.75)';
-    g.strokeText(av.name, 128, 20);
-    g.fillStyle = av.color; g.fillText(av.name, 128, 20);
+    const label = icon ? av.name + ' ' + icon : av.name;
+    g.strokeText(label, 128, 20);
+    g.fillStyle = av.color; g.fillText(label, 128, 20);
     g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(48, 42, 160, 12);
     const f = Math.max(0, hp) / MAX_HP;
     g.fillStyle = f > 0.5 ? '#39ff6a' : f > 0.25 ? '#ffd400' : '#ff3355';
@@ -476,7 +480,9 @@ export class Renderer {
       let av = this.avatars.get(p.id);
       if (!av) { av = this.makeAvatar(p); this.avatars.set(p.id, av); av.root.position.set(p.x, 0, p.z); }
       av.me = p.id === myId;
-      if (p.name !== av.name || p.hp !== av.hp) { av.name = p.name; this.drawLabel(av, p.alive ? p.hp : 0); }
+      const emoting = p.alive && p.emote && !(p.flags & F.MOVING) && view.victory == null;
+      const icon = emoting ? (EMOTES[p.emote - 1] || {}).icon || '' : '';
+      if (p.name !== av.name || p.hp !== av.hp || icon !== av.icon) { av.name = p.name; this.drawLabel(av, p.alive ? p.hp : 0, icon); }
       // posición y rotación
       if (p.alive && !av.alive) { av.root.position.set(p.x, 0, p.z); this.burst(p.x, 1, p.z, p.color, 60, 4, 6); }
       av.root.position.x += (p.x - av.root.position.x) * Math.min(1, dt * 30);
@@ -488,7 +494,14 @@ export class Renderer {
       // animación
       if (view.victory != null) this.play(av, p.id === view.victory ? 'victory' : (p.alive ? 'idle' : 'death'));
       else if (!p.alive) this.play(av, 'death', 0.1);
-      else this.play(av, (p.flags & F.MOVING) ? 'run' : 'idle');
+      else if (p.flags & F.MOVING) this.play(av, 'run');
+      else if (emoting) {
+        const key = (EMOTES[p.emote - 1] || {}).key;
+        const fresh = av.emoteN !== p.emoteN; // el mismo emote repetido vuelve a empezar
+        av.emoteN = p.emoteN;
+        if (av.actions[key]) this.play(av, key, 0.15, fresh); else this.play(av, 'idle');
+      }
+      else this.play(av, 'idle');
       if (av.actions.run) av.actions.run.timeScale = (p.flags & F.SPEED) ? 1.5 : 1.1;
       av.mixer.update(dt);
       // extras visuales
