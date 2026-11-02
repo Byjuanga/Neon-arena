@@ -36,8 +36,8 @@ h2{font-size:24px} h3{font-size:14px;color:var(--muted);text-transform:uppercase
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
 .field{display:flex;flex-direction:column;gap:8px}
 .field label,.opt label{font-size:14px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
-input[type=text],input:not([type]){background:#070918;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:20px;outline:none;width:100%}
-input:not([type]):focus{border-color:var(--cyan);box-shadow:0 0 0 3px #00e5ff30}
+input[type=text],input[type=search],input:not([type]){background:#070918;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:20px;outline:none;width:100%}
+input[type=search]:focus,input:not([type]):focus{border-color:var(--cyan);box-shadow:0 0 0 3px #00e5ff30}
 .swatches{display:flex;gap:8px;flex-wrap:wrap}
 .swatches button{width:34px;height:34px;border-radius:8px;border:2px solid transparent;background:var(--c);cursor:pointer;box-shadow:0 0 12px var(--c)}
 .swatches button.on{border-color:#fff;transform:scale(1.12)}
@@ -153,3 +153,6 @@ td .dot{display:inline-block;width:10px;height:10px;border-radius:2px;background
   font-weight:700;opacity:0;transition:.25s;z-index:20;pointer-events:none;max-width:90vw;text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* los campos de búsqueda se usan para evitar el autocompletado del navegador; sin su aspecto propio */
+input[type=search]{-webkit-appearance:none;appearance:none}
+input[type=search]::-webkit-search-cancel-button,input[type=search]::-webkit-search-decoration{-webkit-appearance:none;display:none}

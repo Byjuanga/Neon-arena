@@ -18,7 +18,6 @@ function hideScreens() { for (const s of document.querySelectorAll('.screen')) s
 
 // ================== Ajustes del jugador ==================
 const prefs = {
-  name: store('na.name') || '',
   color: +(store('na.color') || 0),
   bots: +(store('na.bots') || 5),
   diff: store('na.diff') || 'normal',
@@ -30,7 +29,7 @@ const prefs = {
 };
 function savePrefs() { for (const [k, v] of Object.entries(prefs)) store('na.' + k, typeof v === 'boolean' ? (v ? '1' : '0') : v); }
 const QUALITY_NAMES = { alta: 'Alta', media: 'Media', baja: 'Baja', patata: 'Patata' };
-const myName = () => ($('name').value.trim() || 'Jugador').slice(0, 14);
+const myName = () => ($('apodo').value.trim() || 'Jugador').slice(0, 14);
 
 // ================== Estado de sesión ==================
 const S = {
@@ -721,8 +720,8 @@ function renderSwatches() {
 }
 
 function wireMenus() {
-  $('name').value = prefs.name;
-  $('name').addEventListener('input', () => { prefs.name = $('name').value.trim(); savePrefs(); });
+  // el apodo no se guarda: en un ordenador compartido cada uno escribe el suyo
+  try { localStorage.removeItem('na.name'); } catch (e) {}
   renderSwatches();
   $('swatches').onclick = e => { const b = e.target.closest('button'); if (!b) return; prefs.color = +b.dataset.i; savePrefs(); renderSwatches(); };
   for (const id of ['quality', 'quality2']) {

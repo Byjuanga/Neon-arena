@@ -40,8 +40,8 @@
       <h1 class="logo big">NEÓN<span>ARENA</span></h1>
       <p class="tag">Duelo de robots en una arena de neón · 1 a 8 jugadores</p>
       <div class="field">
-        <label for="name">Nombre</label>
-        <input id="name" maxlength="14" placeholder="Jugador" autocomplete="off">
+        <label for="apodo">Apodo</label>
+        <input id="apodo" type="search" maxlength="14" placeholder="Escribe tu apodo" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other">
       </div>
       <div class="field">
         <label>Color</label>
@@ -51,7 +51,7 @@
         <button class="btn primary" id="btnSolo">Jugar contra bots</button>
         <button class="btn accent" id="btnCreate">Crear sala online</button>
         <div class="join">
-          <input id="code" maxlength="5" placeholder="CÓDIGO" autocomplete="off">
+          <input id="code" type="search" maxlength="5" placeholder="CÓDIGO" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other">
           <button class="btn" id="btnJoin">Unirse</button>
         </div>
       </div>
@@ -130,7 +130,7 @@
         <h3 class="chat-title">Chat</h3>
         <div class="lobby-chat">
           <div id="lobbyChatLog"><p class="muted small" id="lobbyChatEmpty">Nadie ha escrito todavía. ¡Saluda!</p></div>
-          <input id="lobbyChatInput" maxlength="120" placeholder="Escribe un mensaje y pulsa Enter" autocomplete="off">
+          <input id="lobbyChatInput" type="search" maxlength="120" placeholder="Escribe un mensaje y pulsa Enter" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other">
         </div>
       </div>
       <div class="lobby-side">
@@ -161,7 +161,7 @@
   <canvas id="minimap" width="200" height="200"></canvas>
   <div id="chat">
     <div id="chatLog" aria-live="polite"></div>
-    <input id="chatInput" maxlength="120" placeholder="Escribe y pulsa Enter · Esc para cancelar" autocomplete="off" hidden>
+    <input id="chatInput" type="search" maxlength="120" placeholder="Escribe y pulsa Enter · Esc para cancelar" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" hidden>
     <div id="chatHint"><kbd>T</kbd> Chat</div>
   </div>
   <div id="vignette"></div>
