@@ -1,5 +1,11 @@
 # Historial de cambios
 
+## 1.4.1
+
+- Cada versión carga sus archivos con su número de versión, para que el navegador no mezcle
+  la página nueva con código antiguo guardado (los modos no aparecían sin recargar a fondo).
+- El número de versión se ve en el menú principal.
+
 ## 1.4.0: Modos por equipos
 
 - Nuevo modo **Equipos a bajas**: Rojos contra Azules; gana el primer equipo que sume las bajas (20, 30 o 50).

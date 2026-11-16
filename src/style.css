@@ -182,3 +182,4 @@ ul.roster li .team-btn:disabled{cursor:default;opacity:.8}
 #actionBar[hidden]{display:none}
 #actionBar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--yellow),#ff6a1f);box-shadow:0 0 10px var(--yellow)}
 tr.team-row td{font-family:var(--display);font-size:13px;letter-spacing:.1em;color:var(--c);border-top:2px solid var(--c);background:#ffffff08}
+.tag .ver{font-size:13px;opacity:.6;margin-left:6px}

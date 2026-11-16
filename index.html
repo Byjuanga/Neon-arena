@@ -15,9 +15,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="src/style.css">
+<link rel="stylesheet" href="src/style.css?v=1.4.1">
+<!-- Versión de los archivos del juego: al publicar cambios se sube este número (aquí, en style.css y en main.js)
+     para que el navegador no mezcle archivos nuevos con copias antiguas guardadas -->
 <script type="importmap">
-{ "imports": { "three": "./vendor/three/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+{ "imports": {
+  "three": "./vendor/three/three.module.min.js",
+  "three/addons/": "./vendor/three/addons/",
+  "./src/config.js": "./src/config.js?v=1.4.1",
+  "./src/sim.js": "./src/sim.js?v=1.4.1",
+  "./src/render.js": "./src/render.js?v=1.4.1",
+  "./src/audio.js": "./src/audio.js?v=1.4.1"
+} }
 </script>
 <script src="vendor/peerjs.min.js"></script>
 </head>
@@ -38,7 +47,7 @@
   <div class="menu-wrap">
     <div class="menu-left">
       <h1 class="logo big">NEÓN<span>ARENA</span></h1>
-      <p class="tag">Duelo de robots en una arena de neón · 1 a 8 jugadores</p>
+      <p class="tag">Duelo de robots en una arena de neón · 1 a 8 jugadores <span class="ver">v1.4.1</span></p>
       <div class="field">
         <label for="apodo">Apodo</label>
         <input id="apodo" type="search" maxlength="14" placeholder="Escribe tu apodo" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other">
@@ -209,6 +218,6 @@
 
 <div id="fps" hidden></div>
 <div id="toast"></div>
-<script type="module" src="src/main.js"></script>
+<script type="module" src="src/main.js?v=1.4.1"></script>
 </body>
 </html>
