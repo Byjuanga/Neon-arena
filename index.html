@@ -67,6 +67,7 @@
           <tr><td><kbd>Tab</kbd></td><td>Clasificación</td></tr>
           <tr><td><kbd>T</kbd> / <kbd>Enter</kbd></td><td>Chat</td></tr>
           <tr><td><kbd>1</kbd> – <kbd>6</kbd></td><td>Emotes (moverte los cancela)</td></tr>
+          <tr><td><kbd>E</kbd> (mantener)</td><td>Plantar o desactivar la bomba</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>Pausa y opciones</td></tr>
         </table>
       </div>
@@ -95,9 +96,11 @@
 <div class="screen" id="solo">
   <div class="panel">
     <h2>Partida contra bots</h2>
+    <div class="opt"><label>Modo</label><div class="seg" id="segMode"></div></div>
+    <p class="muted small mode-desc" id="soloModeDesc"></p>
     <div class="opt"><label>Bots</label><div class="seg" id="segBots"></div></div>
     <div class="opt"><label>Dificultad</label><div class="seg" id="segDiff"></div></div>
-    <div class="opt"><label>Bajas para ganar</label><div class="seg" id="segKills"></div></div>
+    <div class="opt"><label id="soloGoalLabel">Bajas para ganar</label><div class="seg" id="segKills"></div></div>
     <div class="row">
       <button class="btn ghost" data-back>Volver</button>
       <button class="btn primary" id="btnSoloGo">¡A luchar!</button>
@@ -136,8 +139,10 @@
       </div>
       <div class="lobby-side">
         <h3>Ajustes</h3>
+        <div class="opt"><label>Modo</label><div class="seg" id="lobMode"></div></div>
+        <p class="muted small mode-desc" id="lobModeDesc"></p>
         <div class="opt"><label>Dificultad de bots</label><div class="seg" id="lobDiff"></div></div>
-        <div class="opt"><label>Bajas para ganar</label><div class="seg" id="lobKills"></div></div>
+        <div class="opt"><label id="lobGoalLabel">Bajas para ganar</label><div class="seg" id="lobKills"></div></div>
         <button class="btn" id="btnAddBot">+ Añadir bot</button>
         <button class="btn primary" id="btnStart">Empezar partida</button>
         <p class="muted small" id="lobbyHint"></p>
@@ -150,10 +155,11 @@
 <!-- HUD -->
 <div id="hud" hidden>
   <div id="killfeed"></div>
-  <div id="topcenter"><div id="timer">5:00</div><div class="muted small" id="goal"></div></div>
+  <div id="topcenter"><div id="teamScore" hidden></div><div id="timer">5:00</div><div class="muted small" id="goal"></div></div>
+  <div id="action" hidden><div id="actionText"></div><div id="actionBar"><i></i></div></div>
   <div id="mini-board"></div>
   <div id="announce"></div>
-  <div id="respawn" hidden><div>Has sido eliminado</div><b id="respawnT">3</b></div>
+  <div id="respawn" hidden><div id="respawnText">Has sido eliminado</div><b id="respawnT">3</b></div>
   <div id="bottomleft">
     <div id="powerups"></div>
     <div class="hpwrap"><div id="hpbar"><i></i></div><b id="hpnum">100</b></div>

@@ -50,6 +50,12 @@ export const sfx = {
   spawn() { tone(220, 0.4, { type: 'sine', vol: 0.15, f2: 880 }); },
   click() { tone(1200, 0.04, { type: 'square', vol: 0.05 }); },
   win() { [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone(f, 0.22, { type: 'square', vol: 0.08, at: i * 0.14 })); },
+  round() { [392, 523].forEach((f, i) => tone(f, 0.18, { type: 'square', vol: 0.08, at: i * 0.12 })); },
+  go() { tone(880, 0.25, { type: 'square', vol: 0.1 }); },
+  beep() { tone(1760, 0.07, { type: 'square', vol: 0.06 }); },
+  plant() { [660, 880, 660].forEach((f, i) => tone(f, 0.1, { type: 'square', vol: 0.09, at: i * 0.1 })); },
+  defuse() { [523, 659, 784].forEach((f, i) => tone(f, 0.15, { type: 'triangle', vol: 0.12, at: i * 0.08 })); },
+  explode() { noise(1.4, { vol: 0.7, freq: 250, type: 'lowpass' }); tone(120, 1.2, { type: 'sawtooth', vol: 0.18, f2: 25 }); },
   lose() { [392, 330, 262].forEach((f, i) => tone(f, 0.3, { type: 'triangle', vol: 0.12, at: i * 0.2 })); },
 };
 

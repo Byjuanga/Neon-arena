@@ -25,6 +25,38 @@ export const PICKUP_RESPAWN = 12;
 export const KILL_OPTIONS = [10, 15, 25];
 export const TIME_LIMIT = 300; // 5 minutos
 
+// Modos de juego. goals: opciones del objetivo (bajas o rondas); time: duración máxima en segundos
+export const MODES = {
+  ffa:  { label: 'Todos contra todos', short: 'Todos contra todos', goalLabel: 'Bajas para ganar', goals: [10, 15, 25], def: 15, teams: false, time: 300 },
+  tdm:  { label: 'Equipos a bajas', short: 'Equipos', goalLabel: 'Bajas del equipo para ganar', goals: [20, 30, 50], def: 30, teams: true, time: 480 },
+  bomb: { label: 'Bomba', short: 'Bomba', goalLabel: 'Rondas para ganar', goals: [3, 5, 7], def: 5, teams: true, time: Infinity },
+};
+
+export const TEAMS = [
+  { name: 'Rojos', color: '#ff3355' },
+  { name: 'Azules', color: '#2f8bff' },
+];
+
+// Bomba: tiempos en segundos
+export const BOMB = {
+  plantTime: 3,      // mantener E para plantar
+  defuseTime: 5,     // mantener E para desactivar
+  fuse: 35,          // hasta que explota
+  roundTime: 100,    // para plantar antes de que gane la defensa
+  freeze: 4,         // cuenta atrás al empezar la ronda (nadie se mueve)
+  after: 5,          // pausa al terminar la ronda
+  siteR: 3.6,        // radio de los puntos de plantado
+  useR: 1.7,         // distancia para recoger o desactivar
+};
+// Los puntos están en el lado de la defensa (z negativa); el ataque sale de z positiva
+export const SITES = [
+  { name: 'A', x: -14, z: -13 },
+  { name: 'B', x: 14, z: -13 },
+];
+// Apariciones por lado: 0 = ataque / equipo Rojo (z positiva), 1 = defensa / equipo Azul (z negativa)
+const SIDE0 = [[-1.5, 26], [1.5, 26], [-9, 26], [9, 26], [-13, 24], [13, 24], [-1.5, 22.5], [1.5, 22.5]];
+export const TEAM_SPAWNS = [SIDE0, SIDE0.map(([x, z]) => [x, -z])];
+
 export const COLORS = ['#00e5ff', '#ff2bd6', '#ffd400', '#39ff6a', '#ff6a1f', '#8f5bff', '#ff3355', '#ffffff'];
 export const COLOR_NAMES = ['Cian', 'Magenta', 'Amarillo', 'Verde', 'Naranja', 'Violeta', 'Rojo', 'Blanco'];
 export const BOT_NAMES = ['Voltio', 'Píxel', 'Turbo', 'Chispa', 'Néctar', 'Óxido', 'Cromo', 'Byte', 'Láser', 'Rayo'];

@@ -8,7 +8,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { HALF, BOXES, PICKUP_SPOTS, PICKUP_INFO, CHARACTERS, MAX_HP, EMOTES } from './config.js';
+import { HALF, BOXES, PICKUP_SPOTS, PICKUP_INFO, CHARACTERS, MAX_HP, EMOTES, SITES, BOMB } from './config.js';
 import { F } from './sim.js';
 
 const AIM_Y = 1.1;
@@ -278,6 +278,7 @@ export class Renderer {
     });
 
     // objetos (power-ups)
+    this.buildBombMode();
     this.pickupObjs = PICKUP_SPOTS.map(sp => {
       const color = new THREE.Color(PICKUP_INFO[sp.type].color);
       const glow = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(2.2), toneMapped: false });
@@ -300,6 +301,74 @@ export class Renderer {
       s.add(grp);
       return { grp, item, ring };
     });
+  }
+
+  // ---------- Modo bomba: puntos A y B, y la bomba ----------
+  buildBombMode() {
+    const gold = new THREE.Color('#ffd400');
+    this.siteObjs = SITES.map(st => {
+      const g = new THREE.Group(); g.position.set(st.x, 0, st.z); g.visible = false;
+      const ring = new THREE.Mesh(new THREE.RingGeometry(BOMB.siteR - 0.18, BOMB.siteR, 64),
+        new THREE.MeshBasicMaterial({ color: gold.clone().multiplyScalar(1.8), toneMapped: false, transparent: true, opacity: 0.9, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2; ring.position.y = 0.04;
+      const fill = new THREE.Mesh(new THREE.CircleGeometry(BOMB.siteR, 48),
+        new THREE.MeshBasicMaterial({ color: '#ffd400', transparent: true, opacity: 0.07, depthWrite: false }));
+      fill.rotation.x = -Math.PI / 2; fill.position.y = 0.03;
+      const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+      const c = cv.getContext('2d');
+      c.font = '900 110px Orbitron, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillStyle = '#ffd400'; c.fillText(st.name, 64, 70);
+      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+      const letter = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false, color: new THREE.Color(1.6, 1.6, 1.6) }));
+      letter.rotation.x = -Math.PI / 2; letter.position.y = 0.05;
+      g.add(ring, fill, letter);
+      this.scene.add(g);
+      return g;
+    });
+    // la bomba: un cilindro con una luz que parpadea
+    const bomb = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.32, 0.4), new THREE.MeshStandardMaterial({ color: '#2a2f45', metalness: 0.6, roughness: 0.4 }));
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff3355').multiplyScalar(3), toneMapped: false }));
+    led.position.set(0, 0.2, 0);
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.57, 0.06, 0.42), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff3355').multiplyScalar(2), toneMapped: false }));
+    bomb.add(body, led, strip); bomb.visible = false; body.castShadow = true;
+    const warn = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.05, 40),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff3355').multiplyScalar(2), toneMapped: false, transparent: true, depthWrite: false }));
+    warn.rotation.x = -Math.PI / 2; warn.position.y = 0.04; warn.visible = false;
+    this.scene.add(bomb, warn);
+    this.bombObj = { bomb, led, warn };
+  }
+
+  updateBombMode(view) {
+    const md = view.md, on = !!md && md.m === 'bomb';
+    for (const g of this.siteObjs) g.visible = on;
+    const { bomb, led, warn } = this.bombObj;
+    bomb.visible = warn.visible = false;
+    if (!on) return;
+    const [st, x, z, carrier, , timer] = md.bomb;
+    if (st === 'carried') {
+      const av = this.avatars.get(carrier), p = view.players.get(carrier);
+      if (av && p && p.alive) {
+        // a la espalda del que la lleva
+        bomb.visible = true;
+        bomb.position.set(av.root.position.x - Math.sin(av.root.rotation.y) * 0.45, 1.25, av.root.position.z - Math.cos(av.root.rotation.y) * 0.45);
+        bomb.rotation.y = av.root.rotation.y;
+        led.visible = Math.floor(this.clock * 2) % 2 === 0;
+      }
+    } else if (st === 'dropped' || st === 'planted') {
+      bomb.visible = true;
+      bomb.position.set(x, 0.17, z); bomb.rotation.y = 0;
+      if (st === 'planted') {
+        // parpadeo cada vez más rápido según se acaba el tiempo
+        const rate = timer > 20 ? 2 : timer > 10 ? 4 : timer > 5 ? 7 : 12;
+        const blink = Math.floor(this.clock * rate) % 2 === 0;
+        led.visible = blink;
+        warn.visible = true; warn.position.set(x, 0.04, z);
+        warn.material.opacity = blink ? 0.95 : 0.25;
+        warn.scale.setScalar(1 + (this.clock * rate % 1) * 0.6);
+      } else led.visible = true;
+    }
   }
 
   // ---------- Partículas ----------
@@ -471,7 +540,7 @@ export class Renderer {
   }
 
   // ---------- Fotograma ----------
-  // view: { players: Map, bullets: [], pickups: [], focus: {x,z} | null, victory: id | null }
+  // view: { players: Map, bullets: [], pickups: [], focus: {x,z} | null, victory: Set de ids | null, md: estado del modo }
   update(view, dt, myId) {
     this.clock += dt;
     const seen = new Set();
@@ -480,7 +549,7 @@ export class Renderer {
       let av = this.avatars.get(p.id);
       if (!av) { av = this.makeAvatar(p); this.avatars.set(p.id, av); av.root.position.set(p.x, 0, p.z); }
       av.me = p.id === myId;
-      const emoting = p.alive && p.emote && !(p.flags & F.MOVING) && view.victory == null;
+      const emoting = p.alive && p.emote && !(p.flags & F.MOVING) && !view.victory;
       const icon = emoting ? (EMOTES[p.emote - 1] || {}).icon || '' : '';
       if (p.name !== av.name || p.hp !== av.hp || icon !== av.icon) { av.name = p.name; this.drawLabel(av, p.alive ? p.hp : 0, icon); }
       // posición y rotación
@@ -492,9 +561,10 @@ export class Renderer {
       av.root.rotation.y += da * Math.min(1, dt * 25);
       av.alive = p.alive;
       // animación
-      if (view.victory != null) this.play(av, p.id === view.victory ? 'victory' : (p.alive ? 'idle' : 'death'));
+      if (view.victory) this.play(av, view.victory.has(p.id) ? 'victory' : (p.alive ? 'idle' : 'death'));
       else if (!p.alive) this.play(av, 'death', 0.1);
       else if (p.flags & F.MOVING) this.play(av, 'run');
+      else if (p.flags & F.ACT) this.play(av, 'sit', 0.15); // agachado plantando o desactivando
       else if (emoting) {
         const key = (EMOTES[p.emote - 1] || {}).key;
         const fresh = av.emoteN !== p.emoteN; // el mismo emote repetido vuelve a empezar
@@ -517,7 +587,7 @@ export class Renderer {
       }
       av.gun.position.y = 1.45 + Math.sin(this.clock * 4 + p.id.length) * 0.05;
       if (av.flash > 0) { av.flash -= dt; }
-      av.model.visible = p.alive || av.cur === 'death' || view.victory != null;
+      av.model.visible = p.alive || av.cur === 'death' || !!view.victory;
       if (p.flags & F.DASH && Math.random() < 0.8) this.burst(p.x, 0.6, p.z, p.color, 2, 1, 1);
     }
     for (const id of [...this.avatars.keys()]) if (!seen.has(id)) this.removeAvatar(id);
@@ -542,6 +612,7 @@ export class Renderer {
       o.item.position.y = 1 + Math.sin(this.clock * 3 + i) * 0.15;
     });
 
+    this.updateBombMode(view);
     this.updateParticles(dt);
 
     // cámara
@@ -551,7 +622,7 @@ export class Renderer {
       this.camTarget.x += (tx - this.camTarget.x) * Math.min(1, dt * 6);
       this.camTarget.z += (tz - this.camTarget.z) * Math.min(1, dt * 6);
     }
-    const orbit = view.victory != null;
+    const orbit = !!view.victory;
     const off = orbit
       ? new THREE.Vector3(Math.sin(this.clock * 0.4) * 8, 6, Math.cos(this.clock * 0.4) * 8)
       : new THREE.Vector3(0, 17, 10);
@@ -602,6 +673,14 @@ export class Renderer {
         break;
       }
       case 'pickup': this.burst(ev.x, 1, ev.z, PICKUP_INFO[ev.type].color, 50, 3, 7); break;
+      case 'plant': this.burst(ev.x, 0.4, ev.z, '#ff3355', 40, 3, 4); break;
+      case 'defuse': this.burst(ev.x, 0.6, ev.z, '#2f8bff', 80, 4, 6); break;
+      case 'explode':
+        this.burst(ev.x, 1, ev.z, '#ff6a1f', 260, 16, 12);
+        this.burst(ev.x, 1, ev.z, '#ffd400', 160, 11, 10);
+        this.burst(ev.x, 1, ev.z, '#ffffff', 80, 7, 8);
+        this.shake = 1.4;
+        break;
     }
   }
 }

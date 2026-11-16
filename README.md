@@ -23,6 +23,7 @@ Se puede jugar **solo contra bots** o **online con hasta 8 personas**. Basta con
 ## Características
 
 - 🌐 **Multijugador online de 2 a 8 jugadores** con código de sala. Se puede entrar con la partida empezada.
+- 🎯 **Tres modos**: todos contra todos, equipos a bajas y **Bomba** (plantar y desactivar, al estilo CS:GO).
 - 🤖 **Bots con IA** en tres dificultades: apuntan adelantándose a tu movimiento, esquivan, se cubren y van a por vida cuando están heridos.
 - 💥 **Objetos**: vida, disparo triple, velocidad y escudo.
 - ⚡ **Impulso**: un acelerón rápido para esquivar disparos.
@@ -44,7 +45,26 @@ Se puede jugar **solo contra bots** o **online con hasta 8 personas**. Basta con
 | <kbd>Tab</kbd> | Clasificación |
 | <kbd>T</kbd> o <kbd>Enter</kbd> | Chat |
 | <kbd>1</kbd> – <kbd>6</kbd> | Emotes: saludar, bailar, pulgar arriba, sí, no y sentarse (moverte los cancela) |
+| <kbd>E</kbd> (mantener) | Plantar o desactivar la bomba |
 | <kbd>Esc</kbd> | Pausa y opciones |
+
+## Modos de juego
+
+| Modo | Cómo se gana |
+|---|---|
+| **Todos contra todos** | El primero que llegue a las bajas elegidas (10, 15 o 25). |
+| **Equipos a bajas** | Rojos contra Azules: el primer equipo que sume las bajas elegidas (20, 30 o 50). |
+| **Bomba** | Por rondas (gana quien llegue a 3, 5 o 7). Un equipo ataca y otro defiende; a mitad de partida se cambian. |
+
+**Modo Bomba, paso a paso:**
+1. Al empezar la ronda hay 4 segundos de preparación. Nadie se mueve.
+2. Un atacante lleva la bomba (💣 a la espalda). Tiene que llegar al punto **A** o **B** y mantener **E** quieto 3 segundos.
+3. Si muere, la bomba cae al suelo y otro atacante la puede recoger.
+4. Una vez plantada, la defensa tiene 35 segundos para llegar y mantener **E** 5 segundos para desactivarla.
+5. En la ronda no se reaparece: los eliminados ven el juego desde un compañero hasta la siguiente.
+
+Gana la ronda el ataque si la bomba explota o elimina a la defensa; la defensa, si la desactiva, elimina al ataque
+antes de que la planten o se acaba el tiempo (1:40) sin bomba plantada.
 
 ## Cómo jugar con amigos
 
@@ -52,7 +72,7 @@ Se puede jugar **solo contra bots** o **online con hasta 8 personas**. Basta con
 2. Pulsa **Crear sala online**. Te aparece un código de 5 letras, por ejemplo `K7MXQ`.
 3. Pulsa **Copiar invitación** y mándala por WhatsApp o Discord.
 4. Tus amigos abren el enlace y pulsan **Unirse**.
-5. Añade bots si queréis ser más y pulsa **Empezar partida**.
+5. Elige el modo, añade bots si queréis ser más y pulsa **Empezar partida**. En los modos por equipos, cada uno puede cambiarse de equipo pulsando su etiqueta.
 
 > **Importante:** quien crea la sala hace de servidor. Tiene que dejar la pestaña del juego abierta y en primer plano;
 > si la minimiza, la partida se congela para todos.

@@ -15,6 +15,9 @@ h2{font-size:24px} h3{font-size:14px;color:var(--muted);text-transform:uppercase
 .screen{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;z-index:5;
   background:radial-gradient(ellipse at 50% 120%,#1a0b3a88,transparent 60%),linear-gradient(#05060dcc,#05060dee)}
 .screen.active{display:flex}
+/* si el contenido no cabe, la pantalla se desplaza en vez de cortarse */
+.screen{overflow-y:auto;align-items:flex-start}
+.screen>.panel,.screen>.menu-wrap{margin:auto}
 .screen.overlay{background:#05060daa;backdrop-filter:blur(3px)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:18px;
   min-width:min(440px,92vw);max-width:92vw;box-shadow:0 0 0 1px #000,0 20px 60px #000a,0 0 60px #00e5ff14}
@@ -132,7 +135,7 @@ ul.roster li button{background:none;border:0;color:var(--muted);cursor:pointer;f
 #emoteHint kbd{margin:0 2px 0 6px}
 .chat-title{margin-top:18px}
 .lobby-chat{display:flex;flex-direction:column;gap:8px}
-#lobbyChatLog{height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:#070918;border:1px solid var(--line);border-radius:8px;padding:8px}
+#lobbyChatLog{height:110px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:#070918;border:1px solid var(--line);border-radius:8px;padding:8px}
 #lobbyChatLog .line{background:transparent;padding:1px 2px}
 #lobbyChatLog p{margin:auto}
 #lobbyChatInput{font-size:17px;padding:10px 12px}
@@ -158,3 +161,24 @@ td .dot{display:inline-block;width:10px;height:10px;border-radius:2px;background
 /* los campos de búsqueda se usan para evitar el autocompletado del navegador; sin su aspecto propio */
 input[type=search]{-webkit-appearance:none;appearance:none}
 input[type=search]::-webkit-search-cancel-button,input[type=search]::-webkit-search-decoration{-webkit-appearance:none;display:none}
+
+/* Modos por equipos */
+.mode-desc{margin:-8px 0 0;line-height:1.35}
+.panel .opt .seg{justify-content:flex-end}
+ul.roster li.team-head{background:transparent;border:0;padding:6px 2px 0;font-family:var(--display);font-size:13px;letter-spacing:.12em;color:var(--c)}
+ul.roster li .team-btn{background:#0d1030;border:1px solid var(--c);color:var(--c);border-radius:6px;font-size:12px;padding:3px 8px;font-family:var(--display);cursor:pointer}
+ul.roster li .team-btn:disabled{cursor:default;opacity:.8}
+#teamScore{display:flex;align-items:center;justify-content:center;gap:14px;font-family:var(--display);font-weight:900;font-size:28px;text-shadow:0 0 12px #000}
+#teamScore .t0{color:#ff3355;text-shadow:0 0 14px #ff335588}
+#teamScore .t1{color:#2f8bff;text-shadow:0 0 14px #2f8bff88}
+#teamScore small{font-size:12px;letter-spacing:.12em;opacity:.85}
+#teamScore .vs{font-size:14px;color:var(--muted)}
+#timer.bomb{color:#ff3355;text-shadow:0 0 16px #ff3355}
+#action{position:absolute;left:50%;top:64%;transform:translateX(-50%);text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}
+#action[hidden]{display:none}
+#actionText{font-family:var(--display);font-weight:800;font-size:18px;letter-spacing:.05em;background:#0a0c1ccc;border:1px solid var(--line);border-radius:8px;padding:6px 14px}
+#actionText kbd{font-size:13px}
+#actionBar{width:260px;height:10px;background:#0a0c1ccc;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+#actionBar[hidden]{display:none}
+#actionBar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--yellow),#ff6a1f);box-shadow:0 0 10px var(--yellow)}
+tr.team-row td{font-family:var(--display);font-size:13px;letter-spacing:.1em;color:var(--c);border-top:2px solid var(--c);background:#ffffff08}

@@ -1,5 +1,15 @@
 # Historial de cambios
 
+## 1.4.0: Modos por equipos
+
+- Nuevo modo **Equipos a bajas**: Rojos contra Azules; gana el primer equipo que sume las bajas (20, 30 o 50).
+- Nuevo modo **Bomba** (estilo CS:GO): rondas sin reaparecer; el ataque planta la bomba en el punto A o B
+  manteniendo E y la defensa la desactiva. Gana la ronda quien elimine al otro equipo, quien haga explotar
+  o desactive la bomba, o la defensa si se acaba el tiempo. A mitad de partida se cambian los papeles.
+- Selector de modo en la sala y en la partida contra bots; en la sala cada uno puede cambiarse de equipo.
+- Sin fuego amigo en los modos por equipos. Los bots juegan en equipo: plantan, escoltan, defienden y desactivan.
+- Marcador por equipos, aviso de «mantén E» con barra de progreso, pitidos de la bomba y puntos A y B en el minimapa.
+
 ## 1.3.0: Emotes
 
 - Emotes con las teclas 1-6: saludar, bailar, pulgar arriba, sí, no y sentarse.

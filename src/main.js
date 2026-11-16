@@ -1,8 +1,8 @@
 // Neón Arena: menús, partidas, red y bucle principal.
 import {
-  STEP, SNAP_EVERY, MAX_PLAYERS, COLORS, BOT_NAMES, DIFFICULTY, KILL_OPTIONS, HALF, BOXES, PICKUP_SPOTS,
+  STEP, SNAP_EVERY, MAX_PLAYERS, COLORS, BOT_NAMES, DIFFICULTY, HALF, BOXES, PICKUP_SPOTS,
   PICKUP_INFO, PLAYER_R, SPEED, SPEED_BOOST, DASH_SPEED, DASH_TIME, DASH_CD, FIRE_CD, BULLET_SPEED, BULLET_LIFE,
-  BULLET_R, MAX_HP, CHARACTERS, EMOTES,
+  BULLET_R, MAX_HP, CHARACTERS, EMOTES, MODES, TEAMS, BOMB, SITES,
 } from './config.js';
 import { Game, moveCircle, pointBlocked, F } from './sim.js';
 import { Renderer } from './render.js';
@@ -22,12 +22,21 @@ const prefs = {
   bots: +(store('na.bots') || 5),
   diff: store('na.diff') || 'normal',
   kills: +(store('na.kills') || 15),
+  mode: MODES[store('na.mode')] ? store('na.mode') : 'ffa',
+  goals: (() => { try { return { ffa: 15, tdm: 30, bomb: 5, ...JSON.parse(store('na.goals') || '{}') }; } catch (e) { return { ffa: 15, tdm: 30, bomb: 5 }; } })(),
   quality: store('na.quality') || 'alta',
   fps: store('na.fps') === '1',
   volume: store('na.volume') != null ? +store('na.volume') : 0.6,
   music: store('na.music') !== '0',
 };
-function savePrefs() { for (const [k, v] of Object.entries(prefs)) store('na.' + k, typeof v === 'boolean' ? (v ? '1' : '0') : v); }
+function savePrefs() { for (const [k, v] of Object.entries(prefs)) store('na.' + k, typeof v === 'boolean' ? (v ? '1' : '0') : typeof v === 'object' ? JSON.stringify(v) : v); }
+const MODE_DESC = {
+  ffa: 'Cada uno por su cuenta. Gana quien llegue antes a las bajas.',
+  tdm: 'Rojos contra Azules. Gana el primer equipo que sume las bajas.',
+  bomb: 'Rondas sin reaparecer. El ataque planta la bomba en A o B (mantén E) y la defensa la desactiva. A mitad de partida se cambian los papeles.',
+};
+const isTeams = () => !!(MODES[S.settings.mode] || {}).teams;
+const teamName = t => (TEAMS[t] || {}).name || '';
 const QUALITY_NAMES = { alta: 'Alta', media: 'Media', baja: 'Baja', patata: 'Patata' };
 const myName = () => ($('apodo').value.trim() || 'Jugador').slice(0, 14);
 
@@ -36,15 +45,16 @@ const S = {
   mode: null,          // 'solo' | 'host' | 'guest'
   phase: 'menu',       // 'menu' | 'lobby' | 'playing' | 'over'
   myId: null,
-  roster: [],          // [{id, name, color, bot, char}]
-  settings: { killLimit: 15, difficulty: 'normal' },
+  roster: [],          // [{id, name, color, pcolor, team, bot, char}]
+  settings: { mode: 'ffa', goal: 15, difficulty: 'normal' },
   game: null,          // solo / anfitrión
   peer: null, conns: new Map(), hostConn: null, code: '', guestSeq: 0, botSeq: 0,
   paused: false,
 };
 
 let renderer;
-const view = { players: new Map(), bullets: [], pickups: PICKUP_SPOTS.map(() => 1), time: 0, timeLimit: 300, state: 'playing', focus: null, victory: null };
+// victory: conjunto de ids que celebran al final (null mientras se juega); md: estado del modo
+const view = { players: new Map(), bullets: [], pickups: PICKUP_SPOTS.map(() => 1), time: 0, timeLimit: 300, state: 'playing', focus: null, victory: null, md: null };
 
 // ================== Entrada ==================
 const input = { keys: new Set(), mx: innerWidth / 2, my: innerHeight / 2, fire: false, dash: false, aim: 0 };
@@ -61,14 +71,15 @@ addEventListener('keydown', e => {
     const em = /^(Digit|Numpad)([1-9])$/.exec(e.code);
     if (em && +em[2] <= EMOTES.length && S.phase === 'playing' && !S.paused) { input.em = +em[2]; input.emNet = +em[2]; }
     if (e.code === 'Escape' && S.phase === 'playing') togglePause();
+    if (e.code === 'KeyE') input.act = true;
   }
 });
-addEventListener('keyup', e => { input.keys.delete(e.code); if (e.code === 'Tab') $('scoreboard').hidden = true; });
+addEventListener('keyup', e => { input.keys.delete(e.code); if (e.code === 'Tab') $('scoreboard').hidden = true; if (e.code === 'KeyE') input.act = false; });
 addEventListener('mousemove', e => { input.mx = e.clientX; input.my = e.clientY; const c = $('crosshair'); c.style.transform = `translate(${e.clientX}px,${e.clientY}px)`; });
 addEventListener('mousedown', e => { if (e.button === 0 && S.phase === 'playing' && !S.paused && !chatOpen && !e.target.closest('.panel')) input.fire = true; });
 addEventListener('mouseup', e => { if (e.button === 0) input.fire = false; });
 addEventListener('contextmenu', e => { if (S.phase === 'playing') e.preventDefault(); });
-addEventListener('blur', () => { input.keys.clear(); input.fire = false; });
+addEventListener('blur', () => { input.keys.clear(); input.fire = false; input.act = false; });
 for (const ev of ['keydown', 'keyup', 'mousedown', 'mouseup']) addEventListener(ev, e => { if (!e.repeat) setTimeout(sendGuestInput, 0); });
 
 function moveVec() {
@@ -95,10 +106,11 @@ const tickWorker = new Worker(URL.createObjectURL(new Blob(['setInterval(()=>pos
 tickWorker.onmessage = () => hostTick();
 
 function startLocalGame() {
-  const g = new Game({ killLimit: S.settings.killLimit, difficulty: S.settings.difficulty });
+  applyTeamColors();
+  const g = new Game({ mode: S.settings.mode, goal: S.settings.goal, difficulty: S.settings.difficulty });
   g.onEvent = e => { pendingEvents.push(e); handleEvent(e); };
-  for (const r of S.roster) g.addPlayer(r.id, r.name, r.color, r.bot);
   S.game = g; acc = 0; lastTick = performance.now(); stepCount = 0; pendingEvents = []; endSent = false;
+  for (const r of S.roster) g.addPlayer(r.id, r.name, r.color, r.bot, r.team);
   view.timeLimit = g.timeLimit;
 }
 
@@ -111,7 +123,7 @@ function hostTick() {
   while (acc >= STEP) {
     acc -= STEP;
     const [mx, mz] = moveVec();
-    g.setInput(S.myId, { mx, mz, a: input.aim, f: input.fire && !S.paused, d: input.dash, em: input.em });
+    g.setInput(S.myId, { mx, mz, a: input.aim, f: input.fire && !S.paused, d: input.dash, em: input.em, u: input.act && !S.paused });
     input.dash = false; input.em = 0;
     g.step(STEP);
     stepCount++;
@@ -122,7 +134,7 @@ function hostTick() {
   }
   if (g.state === 'over' && !endSent) {
     endSent = true;
-    const msg = { t: 'end', winner: g.winner, ranking: g.ranking() };
+    const msg = { t: 'end', winner: g.winner, winnerTeam: g.winnerTeam, mode: g.mode, score: g.score.slice(), ranking: g.ranking() };
     if (S.mode === 'host') { const snap = g.snapshot(); snap.ev = pendingEvents; pendingEvents = []; broadcast(snap); broadcast(msg); }
     onEnd(msg);
   }
@@ -134,17 +146,18 @@ function viewFromGame() {
   for (const p of g.players.values()) {
     let f = 0;
     if (p.moving) f |= F.MOVING; if (p.dashT > 0) f |= F.DASH; if (p.shield > 0) f |= F.SHIELD;
-    if (p.triple > 0) f |= F.TRIPLE; if (p.speed > 0) f |= F.SPEED; if (p.invul > 0) f |= F.INVUL;
+    if (p.triple > 0) f |= F.TRIPLE; if (p.speed > 0) f |= F.SPEED; if (p.invul > 0) f |= F.INVUL; if (p.acting) f |= F.ACT;
     const r = S.roster.find(r => r.id === p.id) || {};
     view.players.set(p.id, {
       id: p.id, name: p.name, color: p.color, char: r.char, x: p.x, z: p.z, aim: p.aim, hp: Math.ceil(p.hp), alive: p.alive, flags: f,
-      kills: p.kills, deaths: p.deaths, dashCd: Math.max(0, p.dashCd), triple: p.triple, speed: p.speed, shield: p.shield, respawnT: p.respawnT,
-      emote: p.emote, emoteN: p.emoteN,
+      kills: p.kills, deaths: p.deaths, dashCd: Math.max(0, p.dashCd), triple: p.triple, speed: p.speed, shield: p.shield,
+      respawnT: Number.isFinite(p.respawnT) ? p.respawnT : -1, emote: p.emote, emoteN: p.emoteN, team: p.team,
     });
   }
   view.bullets = g.bullets;
   view.pickups = g.pickups.map(k => k.active);
   view.time = g.time;
+  view.md = g.modeState();
 }
 
 // ================== Cliente remoto (invitado) ==================
@@ -160,8 +173,8 @@ function onSnapshot(s) {
   G.offset = G.offset == null ? off : (off > G.offset ? G.offset + (off - G.offset) * 0.05 : off);
   const players = new Map();
   for (const a of s.p) {
-    const [id, x, z, aim, hp, alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT, emote, emoteN] = a;
-    players.set(id, { id, x, z, aim, hp, alive: !!alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT, emote, emoteN });
+    const [id, x, z, aim, hp, alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT, emote, emoteN, team] = a;
+    players.set(id, { id, x, z, aim, hp, alive: !!alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT, emote, emoteN, team });
   }
   const bullets = new Map();
   for (const [id, x, z, vx, vz, owner] of s.b) bullets.set(id, { id, x, z, vx, vz, owner });
@@ -169,6 +182,7 @@ function onSnapshot(s) {
   while (G.snaps.length > 30) G.snaps.shift();
   view.pickups = s.k;
   view.time = s.time;
+  if (s.md) view.md = s.md;
 
   // corrección de la predicción propia
   const me = players.get(S.myId);
@@ -198,7 +212,7 @@ function sendGuestInput() {
   G.lastSend = performance.now() / 1000;
   const [mx, mz] = moveVec();
   const seq = ++S.guestSeq;
-  S.hostConn.send({ t: 'in', seq, mx, mz, a: +input.aim.toFixed(3), f: input.fire && !S.paused, d: !!input.dashNet, em: input.emNet || 0 });
+  S.hostConn.send({ t: 'in', seq, mx, mz, a: +input.aim.toFixed(3), f: input.fire && !S.paused, d: !!input.dashNet, em: input.emNet || 0, u: !!input.act });
   input.emNet = 0;
   if (G.pred) G.hist.push({ seq, x: G.pred.x, z: G.pred.z });
   if (G.hist.length > 120) G.hist.shift();
@@ -207,7 +221,9 @@ function sendGuestInput() {
 
 function guestFrame(dt) {
   const now = performance.now() / 1000;
-  const [mx, mz] = moveVec();
+  // durante la cuenta atrás de la ronda nadie se mueve ni dispara
+  const frozen = view.md && view.md.m === 'bomb' && view.md.ph === 'freeze';
+  const [mx, mz] = frozen ? [0, 0] : moveVec();
   const me = G.me;
   // predicción del movimiento propio
   if (G.pred && me && me.alive && S.phase === 'playing') {
@@ -226,7 +242,7 @@ function guestFrame(dt) {
     [p.x, p.z] = moveCircle(p.x, p.z, vx * dt, vz * dt, PLAYER_R);
     // balas propias (solo visuales; el daño lo decide el anfitrión)
     G.fireCd -= dt;
-    if (input.fire && G.fireCd <= 0) {
+    if (input.fire && G.fireCd <= 0 && !frozen) {
       G.fireCd = FIRE_CD;
       const r = S.roster.find(r => r.id === S.myId);
       for (const da of (me.flags & F.TRIPLE) ? [-0.16, 0, 0.16] : [0]) {
@@ -377,7 +393,8 @@ function handleEvent(e) {
   const players = view.players;
   if (e.e === 'shot' && e.id === S.myId && S.mode === 'guest' && !e.local) return; // ya se mostró en local
   renderer.fx(e, players, S.myId);
-  const nameOf = id => { const r = S.roster.find(r => r.id === id); return r ? r : { name: '?', color: '#fff' }; };
+  const nameOf = id => { if (id == null) return { name: '💣 Bomba', color: '#ff3355' }; const r = S.roster.find(r => r.id === id); return r ? r : { name: '?', color: '#fff' }; };
+  const myTeam = (S.roster.find(r => r.id === S.myId) || {}).team;
   switch (e.e) {
     case 'shot': if (e.id === S.myId) sfx.shot(1); else { const p = players.get(e.id), me = players.get(S.myId); const d = p && me ? Math.hypot(p.x - me.x, p.z - me.z) : 20; if (d < 25) sfx.shot(Math.max(0.15, 1 - d / 25) * 0.6); } break;
     case 'hit':
@@ -389,7 +406,7 @@ function handleEvent(e) {
       const k = nameOf(e.killer), v = nameOf(e.victim);
       addKillfeed(`<span style="color:${k.color}">${esc(k.name)}</span> ⚡ <span style="color:${v.color}">${esc(v.name)}</span>`, e.killer === S.myId || e.victim === S.myId);
       botBanter(e.killer, e.victim);
-      if (!firstBlood) { firstBlood = true; announce(e.killer === S.myId ? '¡Primera sangre!' : k.name + ': primera sangre'); }
+      if (!firstBlood && e.killer != null) { firstBlood = true; announce(e.killer === S.myId ? '¡Primera sangre!' : k.name + ': primera sangre'); }
       if (e.killer === S.myId) {
         sfx.myKill();
         const now = performance.now();
@@ -400,7 +417,27 @@ function handleEvent(e) {
     }
     case 'pickup': if (e.id === S.myId) { sfx.pickup(); announce(PICKUP_INFO[e.type].label, 900); } break;
     case 'dash': if (e.id === S.myId) sfx.dash(); break;
-    case 'spawn': if (e.id === S.myId) sfx.spawn(); break;
+    case 'spawn': if (e.id === S.myId && !(view.md && view.md.m === 'bomb')) sfx.spawn(); break;
+    // modo bomba
+    case 'round': {
+      const atk = e.atk === myTeam;
+      announce(`Ronda ${e.round} · ${atk ? 'Atacáis' : 'Defendéis'}`, 2600);
+      if (e.carrier === S.myId) setTimeout(() => announce('💣 Llevas la bomba: plántala en A o B', 2600), 2700);
+      sfx.round();
+      break;
+    }
+    case 'live': announce('¡YA!', 900); sfx.go(); break;
+    case 'plant': announce(`💣 Bomba plantada en ${SITES[e.site].name}`, 2200); sfx.plant(); break;
+    case 'defuse': announce('Bomba desactivada', 2000); sfx.defuse(); break;
+    case 'explode': sfx.explode(); break;
+    case 'bombPick': if (e.id === S.myId) announce('💣 Has cogido la bomba', 1500); break;
+    case 'bombDrop': if (view.md && myTeam === view.md.atk) announce('¡La bomba está en el suelo!', 1500); break;
+    case 'roundEnd': {
+      const why = { defuse: 'bomba desactivada', explode: 'la bomba ha explotado', elim: 'equipo eliminado', time: 'se acabó el tiempo' }[e.reason] || '';
+      announce(`${e.w === myTeam ? '¡Ronda ganada!' : 'Ronda perdida'} · ${why}`, 3500);
+      e.w === myTeam ? sfx.myKill() : sfx.lose();
+      break;
+    }
   }
 }
 function addKillfeed(html, mine) {
@@ -429,13 +466,16 @@ function updateHud(dt) {
     $('dash').firstElementChild.style.width = ((1 - Math.min(1, cd / DASH_CD)) * 100) + '%';
     $('dash').classList.toggle('ready', cd <= 0);
     $('respawn').hidden = me.alive || S.phase !== 'playing';
+    const waitRound = me.respawnT < 0; // modo bomba: hasta la siguiente ronda
+    $('respawnText').textContent = waitRound ? 'Eliminado · esperando a la siguiente ronda' : 'Has sido eliminado';
+    $('respawnT').hidden = waitRound;
     $('respawnT').textContent = Math.max(1, Math.ceil(me.respawnT || 0));
   }
+  updateAction(me);
+  bombBeeps(dt);
   if (hudT > 0) return;
   hudT = 0.2;
-  const rem = Math.max(0, view.timeLimit - view.time);
-  $('timer').textContent = Math.floor(rem / 60) + ':' + String(Math.floor(rem % 60)).padStart(2, '0');
-  $('goal').textContent = 'Objetivo: ' + S.settings.killLimit + ' bajas';
+  updateModeHud();
   const list = [...view.players.values()].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
   $('mini-board').innerHTML = list.slice(0, 5).map(p => `<div class="${p.id === S.myId ? 'me' : ''}" style="--c:${p.color}"><span>${esc(p.name)}</span><b>${p.kills}</b></div>`).join('');
   if (me) {
@@ -448,6 +488,59 @@ function updateHud(dt) {
   drawMinimap();
 }
 
+const clock = t => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+function updateModeHud() {
+  const md = view.md, mode = md ? md.m : S.settings.mode;
+  const timer = $('timer');
+  timer.classList.remove('bomb');
+  $('teamScore').hidden = !MODES[mode].teams;
+  if (md && MODES[mode].teams) {
+    const t = i => `<span class="t${i}"><small>${teamName(i).toUpperCase()}</small> ${md.sc[i]}</span>`;
+    $('teamScore').innerHTML = `${t(0)}<span class="vs">–</span>${t(1)}`;
+  }
+  if (mode === 'bomb' && md) {
+    const b = md.bomb;
+    if (md.ph === 'freeze') timer.textContent = 'Preparados · ' + Math.ceil(md.pt);
+    else if (b[0] === 'planted') { timer.textContent = '💣 ' + clock(b[5]); timer.classList.add('bomb'); }
+    else if (md.ph === 'post') timer.textContent = 'Fin de ronda';
+    else timer.textContent = clock(md.rt);
+    $('goal').textContent = `Ronda ${md.rd} · Atacan los ${teamName(md.atk)} · Gana quien llegue a ${md.goal} rondas`;
+  } else {
+    timer.textContent = clock(Math.max(0, view.timeLimit - view.time));
+    $('goal').textContent = mode === 'tdm' ? `Objetivo: ${S.settings.goal} bajas por equipo` : `Objetivo: ${S.settings.goal} bajas`;
+  }
+}
+
+// Aviso de «mantén E» y barra de progreso al plantar o desactivar
+function updateAction(me) {
+  const md = view.md;
+  let text = '', prog = -1;
+  if (md && md.m === 'bomb' && me && me.alive && md.ph === 'live') {
+    const [st, bx, bz, carrier, , , p, by] = md.bomb;
+    const inSite = SITES.some(s => Math.hypot(s.x - me.x, s.z - me.z) < BOMB.siteR);
+    if (st === 'carried' && carrier === S.myId) {
+      text = inSite ? 'Mantén <kbd>E</kbd> quieto para plantar la bomba' : '💣 Llevas la bomba: ve al punto A o B';
+      if (p > 0) prog = p / BOMB.plantTime;
+    } else if (st === 'planted' && me.team !== md.atk && Math.hypot(bx - me.x, bz - me.z) < BOMB.useR + 0.4) {
+      text = 'Mantén <kbd>E</kbd> quieto para desactivar';
+      if (by === S.myId) prog = p / BOMB.defuseTime;
+    }
+  }
+  $('action').hidden = !text;
+  if (text && $('actionText').innerHTML !== text) $('actionText').innerHTML = text;
+  $('actionBar').hidden = prog < 0;
+  if (prog >= 0) $('actionBar').firstElementChild.style.width = Math.min(100, prog * 100) + '%';
+}
+
+// Pitidos de la bomba plantada: cada vez más rápidos
+let beepT = 0;
+function bombBeeps(dt) {
+  const md = view.md;
+  if (!md || md.m !== 'bomb' || md.bomb[0] !== 'planted' || S.phase !== 'playing') { beepT = 0; return; }
+  beepT -= dt;
+  if (beepT <= 0) { const left = md.bomb[5]; beepT = left > 20 ? 1 : left > 10 ? 0.6 : left > 5 ? 0.35 : 0.18; sfx.beep(); }
+}
+
 const mm = $('minimap').getContext('2d');
 function drawMinimap() {
   const W = 200, s = W / (HALF * 2), X = x => (x + HALF) * s;
@@ -455,6 +548,24 @@ function drawMinimap() {
   mm.fillStyle = '#2a3170';
   for (const b of BOXES) mm.fillRect(X(b.x - b.w / 2), X(b.z - b.d / 2), b.w * s, b.d * s);
   PICKUP_SPOTS.forEach((k, i) => { if (!view.pickups[i]) return; mm.fillStyle = PICKUP_INFO[k.type].color; mm.fillRect(X(k.x) - 2, X(k.z) - 2, 4, 4); });
+  const md = view.md;
+  if (md && md.m === 'bomb') {
+    // puntos A y B
+    mm.font = '700 13px Orbitron, sans-serif'; mm.textAlign = 'center'; mm.textBaseline = 'middle';
+    for (const st of SITES) {
+      mm.strokeStyle = '#ffd40088'; mm.lineWidth = 1.5;
+      mm.beginPath(); mm.arc(X(st.x), X(st.z), BOMB.siteR * s, 0, Math.PI * 2); mm.stroke();
+      mm.fillStyle = '#ffd400'; mm.fillText(st.name, X(st.x), X(st.z));
+    }
+    // la bomba: siempre si está en el suelo o plantada; si la llevan, solo la ve el ataque
+    const [stt, bx, bz, carrier] = md.bomb, me = view.players.get(S.myId);
+    let pos = null;
+    if (stt === 'planted' || stt === 'dropped') pos = [bx, bz];
+    else if (stt === 'carried' && me && me.team === md.atk) { const c = view.players.get(carrier); if (c) pos = [c.x, c.z]; }
+    if (pos && (stt !== 'planted' || Math.floor(performance.now() / 300) % 2)) {
+      mm.fillStyle = '#ff3355'; mm.fillRect(X(pos[0]) - 4, X(pos[1]) - 4, 8, 8);
+    }
+  }
   for (const p of view.players.values()) {
     if (!p.alive) continue;
     const me = p.id === S.myId;
@@ -464,17 +575,25 @@ function drawMinimap() {
   }
 }
 
+// Tabla de jugadores; en los modos por equipos, agrupada por equipo con su marcador
+function playerTable(list, score, numbered) {
+  const row = (p, i) => `<tr class="${p.id === S.myId ? 'me' : ''}">${numbered ? `<td>${i + 1}</td>` : ''}<td><span class="dot" style="--c:${p.color}"></span>${esc(p.name)}</td><td class="n">${p.kills}</td><td class="n">${p.deaths}</td></tr>`;
+  const head = `<tr>${numbered ? '<th>#</th>' : ''}<th>Jugador</th><th class="n">Bajas</th><th class="n">Muertes</th></tr>`;
+  const sorted = list.slice().sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+  if (!score) return head + sorted.map(row).join('');
+  return head + [0, 1].map(t => `<tr class="team-row" style="--c:${TEAMS[t].color}"><td colspan="${numbered ? 2 : 1}">${TEAMS[t].name.toUpperCase()}</td><td class="n" colspan="2">${score[t]}</td></tr>` +
+    sorted.filter(p => p.team === t).map(row).join('')).join('');
+}
 function renderScoreboard() {
-  const list = [...view.players.values()].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
-  $('scoreTable').innerHTML = '<tr><th>Jugador</th><th class="n">Bajas</th><th class="n">Muertes</th></tr>' +
-    list.map(p => `<tr class="${p.id === S.myId ? 'me' : ''}"><td><span class="dot" style="--c:${p.color}"></span>${esc(p.name)}</td><td class="n">${p.kills}</td><td class="n">${p.deaths}</td></tr>`).join('');
+  const md = view.md;
+  $('scoreTable').innerHTML = playerTable([...view.players.values()], md && MODES[md.m].teams ? md.sc : null, false);
 }
 
 // ================== Flujo de partida ==================
 function enterGame() {
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   S.phase = 'playing'; S.paused = false;
-  view.victory = null; view.focus = null; view.players.clear(); view.bullets = [];
+  view.victory = null; view.focus = null; view.players.clear(); view.bullets = []; view.md = null;
   firstBlood = false; streak = 0; $('killfeed').innerHTML = '';
   renderer.clearAll();
   hideScreens();
@@ -487,14 +606,20 @@ function enterGame() {
 function onEnd(msg) {
   S.phase = 'over';
   input.fire = false;
-  view.victory = msg.winner;
-  const won = msg.winner === S.myId;
+  const teams = MODES[msg.mode] && MODES[msg.mode].teams;
+  const myTeam = (msg.ranking.find(p => p.id === S.myId) || {}).team;
+  // celebran el ganador (o todo el equipo ganador)
+  view.victory = new Set(teams ? msg.ranking.filter(p => p.team === msg.winnerTeam).map(p => p.id) : [msg.winner]);
+  const won = teams ? msg.winnerTeam === myTeam : msg.winner === S.myId;
   won ? sfx.win() : sfx.lose();
   stopMusic();
   const w = msg.ranking[0];
-  $('endTitle').innerHTML = won ? '¡Has ganado!' : (w ? `<span style="color:${w.color}">${esc(w.name)}</span> gana` : 'Fin');
-  $('endTable').innerHTML = '<tr><th>#</th><th>Jugador</th><th class="n">Bajas</th><th class="n">Muertes</th></tr>' +
-    msg.ranking.map((p, i) => `<tr class="${p.id === S.myId ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="--c:${p.color}"></span>${esc(p.name)}</td><td class="n">${p.kills}</td><td class="n">${p.deaths}</td></tr>`).join('');
+  if (teams) {
+    const t = TEAMS[msg.winnerTeam];
+    $('endTitle').innerHTML = msg.winnerTeam < 0 ? `Empate · ${msg.score[0]} – ${msg.score[1]}`
+      : `${won ? '¡Habéis ganado!' : `Ganan los <span style="color:${t.color}">${t.name}</span>`} · ${msg.score[0]} – ${msg.score[1]}`;
+  } else $('endTitle').innerHTML = won ? '¡Has ganado!' : (w ? `<span style="color:${w.color}">${esc(w.name)}</span> gana` : 'Fin');
+  $('endTable').innerHTML = playerTable(msg.ranking, teams ? msg.score : null, !teams);
   const canRestart = S.mode !== 'guest';
   $('btnAgain').hidden = !canRestart;
   $('endHint').textContent = canRestart ? '' : 'Esperando a que el anfitrión pida revancha…';
@@ -523,7 +648,7 @@ function leave(msg) {
   S.mode = null; S.phase = 'menu'; S.game = null; S.roster = []; S.paused = false;
   clearChat();
   resetGuestState();
-  view.players.clear(); view.bullets = []; view.victory = null; view.focus = { x: 0, z: 0 };
+  view.players.clear(); view.bullets = []; view.victory = null; view.md = null; view.focus = { x: 0, z: 0 };
   renderer.clearAll();
   $('hud').hidden = true; document.body.classList.remove('playing');
   stopMusic();
@@ -536,8 +661,8 @@ function leave(msg) {
 function startSolo() {
   savePrefs();
   S.mode = 'solo'; S.myId = 'h';
-  S.settings = { killLimit: prefs.kills, difficulty: prefs.diff };
-  S.roster = [{ id: 'h', name: myName(), color: COLORS[prefs.color], bot: false, char: CHARACTERS[0].id }];
+  S.settings = { mode: prefs.mode, goal: prefs.goals[prefs.mode], difficulty: prefs.diff };
+  S.roster = [{ id: 'h', name: myName(), color: COLORS[prefs.color], pcolor: COLORS[prefs.color], team: 0, bot: false, char: CHARACTERS[0].id }];
   for (let i = 0; i < prefs.bots; i++) addBotToRoster();
   enterGame();
   startLocalGame();
@@ -546,9 +671,26 @@ function startSolo() {
 function addBotToRoster() {
   const used = new Set(S.roster.map(r => r.color));
   const names = new Set(S.roster.map(r => r.name));
-  const color = COLORS.find(c => !used.has(c)) || COLORS[S.roster.length % COLORS.length];
+  const usedP = new Set(S.roster.map(r => r.pcolor));
+  const color = COLORS.find(c => !usedP.has(c)) || COLORS[S.roster.length % COLORS.length];
   const name = BOT_NAMES.find(n => !names.has(n)) || 'Bot ' + (S.botSeq + 1);
-  S.roster.push({ id: 'b' + (++S.botSeq), name, color, bot: true, char: CHARACTERS[S.botSeq % CHARACTERS.length].id });
+  S.roster.push({ id: 'b' + (++S.botSeq), name, color, pcolor: color, team: smallerTeam(), bot: true, char: CHARACTERS[S.botSeq % CHARACTERS.length].id });
+  applyTeamColors();
+}
+
+// Equipos: el que tenga menos jugadores
+function smallerTeam() {
+  const n = [0, 1].map(t => S.roster.filter(r => r.team === t).length);
+  return n[1] < n[0] ? 1 : 0;
+}
+// En los modos por equipos todos llevan el color de su equipo; en el resto, el suyo
+function applyTeamColors() {
+  for (const r of S.roster) r.color = isTeams() ? TEAMS[r.team].color : (r.pcolor || r.color);
+}
+// Si un equipo se queda vacío al cambiar de modo, se reparten de nuevo
+function balanceTeams() {
+  const n = [0, 1].map(t => S.roster.filter(r => r.team === t).length);
+  if (S.roster.length >= 2 && (n[0] === 0 || n[1] === 0)) S.roster.forEach((r, i) => { r.team = i % 2; });
 }
 
 // ---------- Anfitrión ----------
@@ -565,8 +707,9 @@ function createRoom() {
   p.on('open', () => {
     if (S.peer !== p) return;
     S.mode = 'host'; S.code = code; S.myId = 'h'; S.phase = 'lobby';
-    S.settings = { killLimit: prefs.kills, difficulty: prefs.diff };
-    S.roster = [{ id: 'h', name: myName(), color: COLORS[prefs.color], bot: false, char: CHARACTERS[0].id }];
+    S.settings = { mode: prefs.mode, goal: prefs.goals[prefs.mode], difficulty: prefs.diff };
+    S.roster = [{ id: 'h', name: myName(), color: COLORS[prefs.color], pcolor: COLORS[prefs.color], team: 0, bot: false, char: CHARACTERS[0].id }];
+    applyTeamColors();
     showLobby();
   });
   p.on('connection', conn => { if (S.peer === p) acceptGuest(conn); });
@@ -601,17 +744,22 @@ function acceptGuest(conn) {
       conn.pid = id;
       const used = new Set(S.roster.map(r => r.color));
       let color = COLORS.includes(m.color) && !used.has(m.color) ? m.color : (COLORS.find(c => !used.has(c)) || COLORS[0]);
-      const r = { id, name: String(m.name || 'Jugador').slice(0, 14), color, bot: false, char: CHARACTERS[0].id };
+      const r = { id, name: String(m.name || 'Jugador').slice(0, 14), color, pcolor: color, team: smallerTeam(), bot: false, char: CHARACTERS[0].id };
       S.roster.push(r); S.conns.set(id, conn);
+      applyTeamColors();
       sfx.spawn();
       sysChat(r.name + ' se ha unido');
       if (S.phase === 'playing' || S.phase === 'over') {
-        if (S.phase === 'playing') S.game.addPlayer(id, r.name, r.color, false);
+        if (S.phase === 'playing') S.game.addPlayer(id, r.name, r.color, false, r.team);
         broadcast({ t: 'roster', roster: S.roster });
         conn.send({ t: 'start', roster: S.roster, you: id, settings: S.settings });
       } else showLobby();
     } else if (m.t === 'in' && conn.pid && S.game) {
       S.game.setInput(conn.pid, m);
+    } else if (m.t === 'team' && conn.pid && S.phase === 'lobby' && isTeams()) {
+      // un invitado pide cambiarse de equipo
+      const r = S.roster.find(r => r.id === conn.pid);
+      if (r) { r.team = 1 - r.team; applyTeamColors(); showLobby(); }
     } else if (m.t === 'chat' && conn.pid && typeof m.text === 'string') {
       const now = performance.now();
       if (now - (conn.lastChat || 0) < 400) return;
@@ -632,8 +780,14 @@ function acceptGuest(conn) {
   conn.on('error', drop);
 }
 
+function teamsReady() {
+  if (!isTeams()) return S.roster.length >= 2;
+  return [0, 1].every(t => S.roster.some(r => r.team === t));
+}
+
 function hostStart() {
-  if (S.roster.length < 2) return;
+  if (!teamsReady()) return;
+  applyTeamColors();
   S.phase = 'playing';
   for (const [id, c] of S.conns) if (c.open) c.send({ t: 'start', roster: S.roster, you: id, settings: S.settings });
   enterGame();
@@ -676,7 +830,7 @@ function onHostData(m) {
       if (m.you) S.myId = m.you;
       S.roster = m.roster; S.settings = m.settings;
       resetGuestState();
-      view.timeLimit = 300;
+      view.timeLimit = (MODES[m.settings.mode] || MODES.ffa).time;
       enterGame();
       break;
     case 'roster': S.roster = m.roster; break;
@@ -694,16 +848,34 @@ function showLobby() {
   if (isHost) sendLobby();
   $('roomCode').textContent = S.code;
   $('rosterCount').textContent = `(${S.roster.length}/${MAX_PLAYERS})`;
-  $('roster').innerHTML = S.roster.map(r => `<li style="--c:${r.color}"><i></i><span>${esc(r.name)}</span>` +
-    `<em>${r.id === 'h' ? 'Anfitrión' : r.bot ? 'Bot' : ''}${r.id === S.myId ? ' · Tú' : ''}</em>` +
-    (isHost && r.bot ? `<button data-rm="${r.id}" aria-label="Quitar bot">✕</button>` : '') + '</li>').join('');
+  const teams = isTeams();
+  const item = r => {
+    // en equipos: el anfitrión cambia a cualquiera de equipo; cada invitado, a sí mismo
+    const canSwap = teams && (isHost || r.id === S.myId);
+    const badge = teams ? `<button class="team-btn" data-team="${r.id}" ${canSwap ? 'title="Cambiar de equipo"' : 'disabled'}>${teamName(r.team)}${canSwap ? ' ⇄' : ''}</button>` : '';
+    return `<li style="--c:${r.color}"><i></i><span>${esc(r.name)}</span>` +
+      `<em>${r.id === 'h' ? 'Anfitrión' : r.bot ? 'Bot' : ''}${r.id === S.myId ? ' · Tú' : ''}</em>${badge}` +
+      (isHost && r.bot ? `<button data-rm="${r.id}" aria-label="Quitar bot">✕</button>` : '') + '</li>';
+  };
+  $('roster').innerHTML = teams
+    ? [0, 1].map(t => `<li class="team-head" style="--c:${TEAMS[t].color}">${TEAMS[t].name.toUpperCase()}</li>` + S.roster.filter(r => r.team === t).map(item).join('')).join('')
+    : S.roster.map(item).join('');
   $('btnAddBot').hidden = !isHost; $('btnStart').hidden = !isHost;
   $('btnAddBot').disabled = S.roster.length >= MAX_PLAYERS;
-  $('btnStart').disabled = S.roster.length < 2;
+  $('btnStart').disabled = !teamsReady();
+  const mode = S.settings.mode;
+  renderSeg('lobMode', Object.entries(MODES).map(([k, v]) => [k, v.short]), mode, isHost ? v => {
+    S.settings.mode = v; S.settings.goal = prefs.goals[v]; prefs.mode = v; savePrefs();
+    balanceTeams(); applyTeamColors(); showLobby();
+  } : null);
+  $('lobModeDesc').textContent = MODE_DESC[mode];
+  $('lobGoalLabel').textContent = MODES[mode].goalLabel;
   renderSeg('lobDiff', Object.entries(DIFFICULTY).map(([k, v]) => [k, v.label]), S.settings.difficulty, isHost ? v => { S.settings.difficulty = v; prefs.diff = v; showLobby(); } : null);
-  renderSeg('lobKills', KILL_OPTIONS.map(k => [k, String(k)]), S.settings.killLimit, isHost ? v => { S.settings.killLimit = v; prefs.kills = v; showLobby(); } : null);
+  renderSeg('lobKills', MODES[mode].goals.map(k => [k, String(k)]), S.settings.goal, isHost ? v => { S.settings.goal = v; prefs.goals[mode] = v; savePrefs(); showLobby(); } : null);
   $('lobbyHint').textContent = isHost
-    ? (S.roster.length < 2 ? 'Invita a tus amigos con el código o añade bots.' : 'Pulsa Empezar cuando estéis listos. Se puede entrar a mitad de partida.')
+    ? (S.roster.length < 2 ? 'Invita a tus amigos con el código o añade bots.'
+      : !teamsReady() ? 'Cada equipo necesita al menos un jugador o un bot.'
+      : 'Pulsa Empezar cuando estéis listos. Se puede entrar a mitad de partida.')
     : 'Esperando a que el anfitrión empiece la partida…';
   show('lobby');
 }
@@ -715,9 +887,12 @@ function renderSeg(id, opts, cur, onPick) {
   el.onclick = e => { const b = e.target.closest('button'); if (!b || !onPick) return; sfx.click(); const v = b.dataset.v; onPick(isNaN(+v) ? v : +v); };
 }
 function renderSoloSetup() {
+  renderSeg('segMode', Object.entries(MODES).map(([k, v]) => [k, v.short]), prefs.mode, v => { prefs.mode = v; savePrefs(); renderSoloSetup(); });
+  $('soloModeDesc').textContent = MODE_DESC[prefs.mode] + (MODES[prefs.mode].teams ? ' Los bots se reparten entre tu equipo y el rival.' : '');
+  $('soloGoalLabel').textContent = MODES[prefs.mode].goalLabel;
   renderSeg('segBots', [1, 2, 3, 4, 5, 6, 7].map(n => [n, String(n)]), prefs.bots, v => { prefs.bots = v; renderSoloSetup(); });
   renderSeg('segDiff', Object.entries(DIFFICULTY).map(([k, v]) => [k, v.label]), prefs.diff, v => { prefs.diff = v; renderSoloSetup(); });
-  renderSeg('segKills', KILL_OPTIONS.map(k => [k, String(k)]), prefs.kills, v => { prefs.kills = v; renderSoloSetup(); });
+  renderSeg('segKills', MODES[prefs.mode].goals.map(k => [k, String(k)]), prefs.goals[prefs.mode], v => { prefs.goals[prefs.mode] = v; savePrefs(); renderSoloSetup(); });
 }
 function renderSwatches() {
   $('swatches').innerHTML = COLORS.map((c, i) => `<button style="--c:${c}" class="${i === prefs.color ? 'on' : ''}" data-i="${i}" aria-label="Color ${i + 1}"></button>`).join('');
@@ -759,6 +934,13 @@ function wireMenus() {
   for (const b of document.querySelectorAll('[data-back]')) b.onclick = () => { if (S.mode) leave(); else show('menu'); };
   $('btnAddBot').onclick = () => { if (S.mode !== 'host' || S.roster.length >= MAX_PLAYERS) return; addBotToRoster(); showLobby(); };
   $('roster').onclick = e => {
+    const tb = e.target.closest('[data-team]');
+    if (tb && isTeams()) {
+      const id = tb.dataset.team;
+      if (S.mode === 'host') { const r = S.roster.find(r => r.id === id); if (r) { r.team = 1 - r.team; applyTeamColors(); showLobby(); } }
+      else if (id === S.myId && S.hostConn && S.hostConn.open) S.hostConn.send({ t: 'team' });
+      return;
+    }
     const b = e.target.closest('[data-rm]'); if (!b || S.mode !== 'host') return;
     S.roster = S.roster.filter(r => r.id !== b.dataset.rm); showLobby();
   };
@@ -821,9 +1003,14 @@ function frame(now) {
     else if (S.game) viewFromGame();
     const me = view.players.get(S.myId);
     const [ax, az] = updateAim(me);
-    if (view.victory != null) {
-      const w = view.players.get(view.victory);
+    if (view.victory) {
+      const w = view.players.get([...view.victory][0]);
       if (w) view.focus = { x: w.x, z: w.z };
+    } else if (me && !me.alive && me.respawnT < 0) {
+      // eliminado en modo bomba: ver la ronda desde un compañero vivo
+      const mate = [...view.players.values()].find(p => p.alive && p.team === me.team);
+      const f = mate || me;
+      view.focus = { x: f.x, z: f.z };
     } else if (me) view.focus = { x: me.x, z: me.z, ax: me.alive ? ax : 0, az: me.alive ? az : 0 };
     updateHud(dt);
   } else {
