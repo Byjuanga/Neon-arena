@@ -30,6 +30,9 @@ export const MODES = {
   ffa:  { label: 'Todos contra todos', short: 'Todos contra todos', goalLabel: 'Bajas para ganar', goals: [10, 15, 25], def: 15, teams: false, time: 300 },
   tdm:  { label: 'Equipos a bajas', short: 'Equipos', goalLabel: 'Bajas del equipo para ganar', goals: [20, 30, 50], def: 30, teams: true, time: 480 },
   bomb: { label: 'Bomba', short: 'Bomba', goalLabel: 'Rondas para ganar', goals: [3, 5, 7], def: 5, teams: true, time: Infinity },
+  // minijuegos de carreras: cada uno con su propio mapa
+  kart: { label: 'Neón Kart', short: 'Kart', goalLabel: 'Vueltas', goals: [1, 3, 5], def: 3, teams: false, time: 420, race: true },
+  parkour: { label: 'Carrera de Neón', short: 'Parkour', goalLabel: null, goals: null, def: 1, teams: false, time: 300, race: true },
 };
 
 export const TEAMS = [
@@ -79,7 +82,7 @@ export const CHARACTERS = [
     tint: 'Main',
     anims: {
       idle: 'Idle', run: 'Running', death: 'Death', victory: 'Dance',
-      wave: 'Wave', dance: 'Dance', thumbs: 'ThumbsUp', yes: 'Yes', no: 'No', sit: 'Sitting',
+      wave: 'Wave', dance: 'Dance', thumbs: 'ThumbsUp', yes: 'Yes', no: 'No', sit: 'Sitting', jump: 'Jump',
     },
   },
 ];

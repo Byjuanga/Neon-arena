@@ -8,6 +8,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { buildKartWorld, makeCar, buildParkourWorld } from './worlds.js';
+import { platPos, tileDrop, laserAngle } from './parkour.js';
 import { HALF, BOXES, PICKUP_SPOTS, PICKUP_INFO, CHARACTERS, MAX_HP, EMOTES, SITES, BOMB } from './config.js';
 import { F } from './sim.js';
 
@@ -214,10 +216,13 @@ export class Renderer {
     sun.shadow.mapSize.set(2048, 2048);
     const sc = sun.shadow.camera; sc.left = sc.bottom = -36; sc.right = sc.top = 36; sc.near = 5; sc.far = 90;
     sun.shadow.bias = -0.0005;
-    s.add(sun); this.sun = sun;
+    s.add(sun, sun.target); this.sun = sun;
+    // todo lo de la arena va en un grupo: en los minijuegos se oculta y se ve su propio mapa
+    const A = this.arena = new THREE.Group(); s.add(A);
+    this.world = 'arena';
     this.cornerLights = [];
     for (const [x, z, c] of [[-HALF, -HALF, '#ff2bd6'], [HALF, HALF, '#00e5ff'], [HALF, -HALF, '#8f5bff'], [-HALF, HALF, '#00e5ff']]) {
-      const l = new THREE.PointLight(c, 25, 30, 2); l.position.set(x * 0.8, 6, z * 0.8); s.add(l);
+      const l = new THREE.PointLight(c, 25, 30, 2); l.position.set(x * 0.8, 6, z * 0.8); A.add(l);
       this.cornerLights.push(l);
     }
 
@@ -241,10 +246,10 @@ export class Renderer {
     tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2),
       new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55, metalness: 0.35, envMapIntensity: 0.15 }));
-    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; floor.userData.flat = true; s.add(floor);
+    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; floor.userData.flat = true; A.add(floor);
     this.floorTex = tex;
     const outer = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: '#03040a' }));
-    outer.rotation.x = -Math.PI / 2; outer.position.y = -0.02; s.add(outer);
+    outer.rotation.x = -Math.PI / 2; outer.position.y = -0.02; A.add(outer);
 
     // muros perimetrales
     const wallMat = new THREE.MeshStandardMaterial({ color: '#12162e', metalness: 0.6, roughness: 0.4, envMapIntensity: 0.3 });
@@ -256,8 +261,8 @@ export class Renderer {
       strips.push(new THREE.BoxGeometry(w > 1 ? w : 0.18, 0.06, d > 1 ? d : 0.18).translate(x, 1.22, z));
     }
     const wallMesh = new THREE.Mesh(mergeGeometries(walls), wallMat);
-    wallMesh.receiveShadow = true; wallMesh.userData.flat = true; s.add(wallMesh);
-    s.add(new THREE.Mesh(mergeGeometries(strips), stripMat));
+    wallMesh.receiveShadow = true; wallMesh.userData.flat = true; A.add(wallMesh);
+    A.add(new THREE.Mesh(mergeGeometries(strips), stripMat));
 
     // obstáculos con bordes de neón
     const boxMat = new THREE.MeshStandardMaterial({ color: '#1b2040', metalness: 0.7, roughness: 0.35, envMapIntensity: 0.35 });
@@ -270,10 +275,10 @@ export class Renderer {
       edgeGeos[col].push(new THREE.EdgesGeometry(geo).translate(b.x, b.h / 2, b.z));
     }
     const boxMesh = new THREE.Mesh(mergeGeometries(boxGeos), boxMat);
-    boxMesh.castShadow = boxMesh.receiveShadow = true; boxMesh.userData.flat = true; s.add(boxMesh);
+    boxMesh.castShadow = boxMesh.receiveShadow = true; boxMesh.userData.flat = true; A.add(boxMesh);
     edgeGeos.forEach((list, i) => {
       if (!list.length) return;
-      s.add(new THREE.LineSegments(mergeGeometries(list),
+      A.add(new THREE.LineSegments(mergeGeometries(list),
         new THREE.LineBasicMaterial({ color: new THREE.Color(edgeCols[i]).multiplyScalar(2.5), toneMapped: false })));
     });
 
@@ -298,9 +303,105 @@ export class Renderer {
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.9, 32),
         new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(1.5), toneMapped: false, transparent: true, opacity: 0.9 }));
       ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02; grp.add(ring);
-      s.add(grp);
+      A.add(grp);
       return { grp, item, ring };
     });
+  }
+
+  // ---------- Mundos de los minijuegos (se crean la primera vez que se usan) ----------
+  setWorld(m) {
+    const w = m === 'kart' || m === 'parkour' ? m : 'arena';
+    if (w === this.world) return;
+    this.world = w;
+    const prep = g => { this.scene.add(g); if (this.quality === 'patata') g.traverse(o => { if (o.isMesh) this.toLow(o); }); };
+    if (w === 'kart' && !this.kart) { this.kart = buildKartWorld(); prep(this.kart.group); }
+    if (w === 'parkour' && !this.parkour) { this.parkour = buildParkourWorld(); prep(this.parkour.group); }
+    this.arena.visible = w === 'arena';
+    if (this.kart) this.kart.group.visible = w === 'kart';
+    if (this.parkour) this.parkour.group.visible = w === 'parkour';
+    const fog = { arena: [45, 90], kart: [70, 170], parkour: [55, 140] }[w];
+    this.scene.fog.near = fog[0]; this.scene.fog.far = fog[1];
+    for (const id of [...this.avatars.keys()]) this.removeAvatar(id);
+    this.clearCars();
+  }
+
+  // ---------- Neón Kart: coches ----------
+  carLabel(name, color) {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 48;
+    const g = cv.getContext('2d');
+    g.font = '700 28px Rajdhani, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 5; g.strokeStyle = 'rgba(0,0,0,.75)'; g.strokeText(name, 128, 24);
+    g.fillStyle = color; g.fillText(name, 128, 24);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, depthTest: false, transparent: true }));
+    sp.scale.set(3.2, 0.6, 1); sp.position.y = 2.4; sp.renderOrder = 10;
+    return sp;
+  }
+
+  clearCars() {
+    if (!this.cars) { this.cars = new Map(); return; }
+    for (const c of this.cars.values()) {
+      this.scene.remove(c.root);
+      c.root.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) [o.material].flat().forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); });
+    }
+    this.cars.clear();
+  }
+
+  updateKart(view, dt, myId) {
+    if (!this.cars) this.cars = new Map();
+    const seen = new Set();
+    for (const p of view.players.values()) {
+      seen.add(p.id);
+      let car = this.cars.get(p.id);
+      if (!car) {
+        car = makeCar(p.color); car.spin = 0;
+        car.root.add(car.label = this.carLabel(p.name, p.color));
+        if (this.quality === 'patata') car.root.traverse(o => { if (o.isMesh) this.toLow(o); });
+        car.root.position.set(p.x, p.y || 0, p.z);
+        this.scene.add(car.root); this.cars.set(p.id, car);
+      }
+      const r = car.root;
+      r.position.x += (p.x - r.position.x) * Math.min(1, dt * 30);
+      r.position.z += (p.z - r.position.z) * Math.min(1, dt * 30);
+      r.position.y = p.y || 0;
+      car.spin = p.sv > 0 ? car.spin + dt * 14 : 0;
+      const yaw = p.aim + (p.dr || 0) * 0.35 + car.spin;
+      let da = yaw - r.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
+      r.rotation.y += da * Math.min(1, dt * (car.spin ? 60 : 20));
+      car.body.rotation.z = -(p.dr || 0) * 0.08;
+      car.body.rotation.x = (p.y || 0) > 0.05 ? -0.12 : 0;
+      for (const w of car.wheels) w.rotation.x += (p.sp || 0) * dt / 0.42;
+      const boost = !!(p.flags & F.DASH);
+      car.flame.visible = boost;
+      if (boost) { car.flame.scale.set(1, 1, 0.8 + Math.random() * 0.6); if (Math.random() < 0.6) this.burst(p.x - Math.sin(p.aim) * 2.4, 0.6, p.z - Math.cos(p.aim) * 2.4, '#ff8a1f', 2, 1.5, 1); }
+      car.shield.visible = !!(p.flags & F.SHIELD);
+      if (car.shield.visible) car.shield.material.opacity = 0.16 + Math.sin(this.clock * 8) * 0.06;
+      // chispas al derrapar
+      if (p.dr && Math.random() < 0.5) this.burst(p.x, 0.15, p.z, (p.dt || 0) > 1.1 ? '#ff8a1f' : (p.dt || 0) > 0.55 ? '#00e5ff' : '#ffffff', 1, 1.5, 1.5);
+      car.under.material.opacity = p.id === myId ? 0.5 : 0.3;
+    }
+    for (const [id, c] of this.cars) if (!seen.has(id)) { this.scene.remove(c.root); this.cars.delete(id); }
+    // cajas de objetos y minas
+    const md = view.md || {};
+    this.kart.boxes.forEach((b, i) => { b.visible = !md.boxes || !!md.boxes[i]; b.rotation.y += dt * 1.5; b.rotation.x += dt * 0.7; b.position.y = 1 + Math.sin(this.clock * 3 + i) * 0.15; });
+    const mines = md.mines || [];
+    while (this.kart.mines.length < mines.length) this.kart.mineMesh();
+    this.kart.mines.forEach((m, i) => {
+      m.visible = i < mines.length;
+      if (m.visible) { m.position.set(mines[i][1], 0.45, mines[i][2]); m.scale.setScalar(Math.floor(this.clock * 4) % 2 ? 1 : 0.85); }
+    });
+  }
+
+  // ---------- Carrera de Neón: plataformas móviles, baldosas y láseres ----------
+  updateParkour(view) {
+    const T = view.T || 0, md = view.md || {};
+    const tiles = new Map((md.tiles || []).map(([i, st, t]) => [i, { st, t }]));
+    for (const d of this.parkour.dynamic) {
+      const c = platPos(d.p, T), drop = tileDrop(d.i, tiles);
+      d.g.visible = drop > -25;
+      d.g.position.set(c.x, c.y + drop - d.p.th / 2, c.z);
+    }
+    for (const L of this.parkour.lasers) L.g.rotation.y = -laserAngle(L.l, T);
   }
 
   // ---------- Modo bomba: puntos A y B, y la bomba ----------
@@ -323,7 +424,7 @@ export class Renderer {
         new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false, color: new THREE.Color(1.6, 1.6, 1.6) }));
       letter.rotation.x = -Math.PI / 2; letter.position.y = 0.05;
       g.add(ring, fill, letter);
-      this.scene.add(g);
+      this.arena.add(g);
       return g;
     });
     // la bomba: un cilindro con una luz que parpadea
@@ -336,7 +437,7 @@ export class Renderer {
     const warn = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.05, 40),
       new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff3355').multiplyScalar(2), toneMapped: false, transparent: true, depthWrite: false }));
     warn.rotation.x = -Math.PI / 2; warn.position.y = 0.04; warn.visible = false;
-    this.scene.add(bomb, warn);
+    this.arena.add(bomb, warn);
     this.bombObj = { bomb, led, warn };
   }
 
@@ -471,7 +572,7 @@ export class Renderer {
       if (!clip) continue;
       const a = mixer.clipAction(clip);
       // muerte, sentarse y los gestos cortos se reproducen una vez y se quedan en la última pose
-      if (['death', 'sit'].includes(k) || EMOTES.some(e => e.key === k && e.time > 0)) { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; }
+      if (['death', 'sit', 'jump'].includes(k) || EMOTES.some(e => e.key === k && e.time > 0)) { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; }
       actions[k] = a;
     }
     if (this.quality === 'patata') root.traverse(o => { if (o.isMesh) this.toLow(o); });
@@ -522,6 +623,7 @@ export class Renderer {
 
   clearAll() {
     for (const id of [...this.avatars.keys()]) this.removeAvatar(id);
+    this.clearCars();
     for (const m of this.bulletMeshes.values()) { m.visible = false; this.bulletPool.push(m); }
     this.bulletMeshes.clear();
   }
@@ -543,8 +645,11 @@ export class Renderer {
   // view: { players: Map, bullets: [], pickups: [], focus: {x,z} | null, victory: Set de ids | null, md: estado del modo }
   update(view, dt, myId) {
     this.clock += dt;
+    this.setWorld(view.md && view.md.m);
     const seen = new Set();
-    for (const p of view.players.values()) {
+    const parkour = this.world === 'parkour';
+    if (this.world === 'kart') this.updateKart(view, dt, myId);
+    else for (const p of view.players.values()) {
       seen.add(p.id);
       let av = this.avatars.get(p.id);
       if (!av) { av = this.makeAvatar(p); this.avatars.set(p.id, av); av.root.position.set(p.x, 0, p.z); }
@@ -553,9 +658,11 @@ export class Renderer {
       const icon = emoting ? (EMOTES[p.emote - 1] || {}).icon || '' : '';
       if (p.name !== av.name || p.hp !== av.hp || icon !== av.icon) { av.name = p.name; this.drawLabel(av, p.alive ? p.hp : 0, icon); }
       // posición y rotación
-      if (p.alive && !av.alive) { av.root.position.set(p.x, 0, p.z); this.burst(p.x, 1, p.z, p.color, 60, 4, 6); }
+      if (p.alive && !av.alive) { av.root.position.set(p.x, p.y || 0, p.z); this.burst(p.x, 1, p.z, p.color, 60, 4, 6); }
+      if (Math.abs((p.y || 0) - av.root.position.y) > 6) av.root.position.set(p.x, p.y, p.z); // reaparece tras caerse
       av.root.position.x += (p.x - av.root.position.x) * Math.min(1, dt * 30);
       av.root.position.z += (p.z - av.root.position.z) * Math.min(1, dt * 30);
+      av.root.position.y += ((p.y || 0) - av.root.position.y) * Math.min(1, dt * 30);
       let da = p.aim - av.root.rotation.y;
       da = Math.atan2(Math.sin(da), Math.cos(da));
       av.root.rotation.y += da * Math.min(1, dt * 25);
@@ -563,6 +670,7 @@ export class Renderer {
       // animación
       if (view.victory) this.play(av, view.victory.has(p.id) ? 'victory' : (p.alive ? 'idle' : 'death'));
       else if (!p.alive) this.play(av, 'death', 0.1);
+      else if (p.air) this.play(av, 'jump', 0.1);
       else if (p.flags & F.MOVING) this.play(av, 'run');
       else if (p.flags & F.ACT) this.play(av, 'sit', 0.15); // agachado plantando o desactivando
       else if (emoting) {
@@ -575,7 +683,7 @@ export class Renderer {
       if (av.actions.run) av.actions.run.timeScale = (p.flags & F.SPEED) ? 1.5 : 1.1;
       av.mixer.update(dt);
       // extras visuales
-      av.gun.visible = p.alive;
+      av.gun.visible = p.alive && !parkour;
       av.label.visible = p.alive;
       av.ring.visible = p.alive;
       av.ring.material.opacity = av.me ? 0.95 : 0.55;
@@ -588,9 +696,10 @@ export class Renderer {
       av.gun.position.y = 1.45 + Math.sin(this.clock * 4 + p.id.length) * 0.05;
       if (av.flash > 0) { av.flash -= dt; }
       av.model.visible = p.alive || av.cur === 'death' || !!view.victory;
-      if (p.flags & F.DASH && Math.random() < 0.8) this.burst(p.x, 0.6, p.z, p.color, 2, 1, 1);
+      if (p.flags & F.DASH && Math.random() < 0.8) this.burst(p.x, (p.y || 0) + 0.6, p.z, p.color, 2, 1, 1);
     }
     for (const id of [...this.avatars.keys()]) if (!seen.has(id)) this.removeAvatar(id);
+    if (parkour) this.updateParkour(view);
 
     // balas
     const live = new Set();
@@ -598,7 +707,7 @@ export class Renderer {
       live.add(b.id);
       let m = this.bulletMeshes.get(b.id);
       if (!m) { m = this.bulletMesh(b.color); this.bulletMeshes.set(b.id, m); }
-      m.position.set(b.x, AIM_Y, b.z);
+      m.position.set(b.x, this.world === 'kart' ? 0.9 : AIM_Y, b.z);
       m.rotation.y = Math.atan2(b.vx, b.vz);
     }
     for (const [id, m] of this.bulletMeshes) if (!live.has(id)) { m.visible = false; this.bulletPool.push(m); this.bulletMeshes.delete(id); }
@@ -615,25 +724,39 @@ export class Renderer {
     this.updateBombMode(view);
     this.updateParticles(dt);
 
-    // cámara
-    if (view.focus) {
-      const f = view.focus;
-      const tx = f.x + (f.ax || 0), tz = f.z + (f.az || 0);
-      this.camTarget.x += (tx - this.camTarget.x) * Math.min(1, dt * 6);
-      this.camTarget.z += (tz - this.camTarget.z) * Math.min(1, dt * 6);
+    // cámara: desde arriba en la arena, detrás del coche en el kart y detrás del robot en el parkour
+    const orbit = !!view.victory, f = view.focus, k = Math.min(1, dt * 6);
+    let want, look;
+    if (f) {
+      const fy = f.y || 0;
+      if (this.world === 'kart' && !orbit) {
+        const h = f.h || 0, sx = Math.sin(h), sz = Math.cos(h);
+        this.camTarget.lerp(new THREE.Vector3(f.x + sx * 6, fy + 1, f.z + sz * 6), Math.min(1, dt * 10));
+        want = new THREE.Vector3(f.x - sx * 10, fy + 4.6, f.z - sz * 10);
+      } else if (this.world === 'parkour' && !orbit) {
+        this.camTarget.lerp(new THREE.Vector3(f.x * 0.7, fy, f.z - 4), k);
+        want = new THREE.Vector3(this.camTarget.x, this.camTarget.y + 7.5, this.camTarget.z + 14);
+      } else {
+        this.camTarget.lerp(new THREE.Vector3(f.x + (f.ax || 0), this.world === 'arena' ? 0 : fy, f.z + (f.az || 0)), k);
+      }
     }
-    const orbit = !!view.victory;
-    const off = orbit
-      ? new THREE.Vector3(Math.sin(this.clock * 0.4) * 8, 6, Math.cos(this.clock * 0.4) * 8)
-      : new THREE.Vector3(0, 17, 10);
-    const want = this.camTarget.clone().add(off);
-    this.camera.position.lerp(want, Math.min(1, dt * (orbit ? 2 : 8)));
+    if (!want) {
+      const off = orbit
+        ? new THREE.Vector3(Math.sin(this.clock * 0.4) * 8, 6, Math.cos(this.clock * 0.4) * 8)
+        : new THREE.Vector3(0, 17, 10);
+      want = this.camTarget.clone().add(off);
+    }
+    look = this.camTarget.clone(); if (orbit) look.y += 1.2; else if (this.world === 'parkour') look.y += 1;
+    this.camera.position.lerp(want, Math.min(1, dt * (orbit ? 2 : this.world === 'kart' ? 7 : 8)));
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt * 2.5);
       const s = this.shake * 0.5;
       this.camera.position.x += (Math.random() - 0.5) * s; this.camera.position.z += (Math.random() - 0.5) * s;
     }
-    this.camera.lookAt(this.camTarget.x, orbit ? 1.2 : 0, this.camTarget.z);
+    this.camera.lookAt(look);
+    // el sol sigue a la cámara para que haya sombras en cualquier parte del mapa
+    this.sun.position.set(this.camTarget.x + 18, this.camTarget.y + 40, this.camTarget.z + 12);
+    this.sun.target.position.copy(this.camTarget);
 
     if (this.useBloom) this.composer.render(dt); else this.renderer.render(this.scene, this.camera);
   }
@@ -649,7 +772,14 @@ export class Renderer {
   // efectos por evento
   fx(ev, players, myId) {
     const p = players.get(ev.id);
+    const py = p ? (p.y || 0) : 0;
     switch (ev.e) {
+      case 'spin': this.burst(ev.x, 1, ev.z, '#ff3355', 50, 6, 5); if (ev.id === myId) this.shake = 0.8; break;
+      case 'zap': if (p) this.burst(p.x, py + 1, p.z, '#ff3355', 30, 5, 4); break;
+      case 'finish': if (p) { this.burst(p.x, py + 1.5, p.z, '#ffd400', 120, 7, 9); this.burst(p.x, py + 1.5, p.z, p.color, 60, 6, 8); } break;
+      case 'checkpoint': if (p) this.burst(p.x, py + 1, p.z, '#ffd400', 50, 4, 6); break;
+      case 'item': if (p) this.burst(p.x, 1.2, p.z, '#ff2bd6', 30, 4, 4); break;
+      case 'bounce': if (p) this.burst(p.x, py + 0.2, p.z, '#39ff6a', 20, 3, 4); break;
       case 'shot': {
         const av = this.avatars.get(ev.id);
         if (av && p) {

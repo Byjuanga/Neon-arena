@@ -183,3 +183,21 @@ ul.roster li .team-btn:disabled{cursor:default;opacity:.8}
 #actionBar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--yellow),#ff6a1f);box-shadow:0 0 10px var(--yellow)}
 tr.team-row td{font-family:var(--display);font-size:13px;letter-spacing:.1em;color:var(--c);border-top:2px solid var(--c);background:#ffffff08}
 .tag .ver{font-size:13px;opacity:.6;margin-left:6px}
+
+/* Minijuegos de carreras */
+body.race #bottomleft,body.race #crosshair{display:none}
+body.race.playing{cursor:default}
+#raceHud{position:absolute;left:18px;bottom:18px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+#raceHud[hidden]{display:none}
+#racePos{font-family:var(--display);font-weight:900;font-size:64px;line-height:1;color:#fff;text-shadow:0 0 18px var(--cyan),0 0 4px #000}
+#racePos small{font-size:24px;color:var(--muted);text-shadow:none;margin-left:4px}
+#raceInfo{font-family:var(--display);font-weight:800;font-size:18px;letter-spacing:.06em;background:#0a0c1ccc;border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+#raceItem{display:flex;align-items:center;gap:10px;background:#0a0c1ccc;border:2px solid var(--pink);border-radius:12px;padding:8px 14px;box-shadow:0 0 18px #ff2bd655}
+#raceItem[hidden]{display:none}
+#raceItemIcon{font-size:34px;line-height:1}
+#raceItemName{font-family:var(--display);font-size:13px;letter-spacing:.1em}
+#raceSpeed{font-family:var(--display);font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+#raceSpeed:empty{display:none}
+#mini-board div.done b{color:var(--yellow)}
+body.race #chat{bottom:200px}
+body.kart #emoteHint{display:none}

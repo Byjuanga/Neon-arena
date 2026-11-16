@@ -23,7 +23,8 @@ Se puede jugar **solo contra bots** o **online con hasta 8 personas**. Basta con
 ## Características
 
 - 🌐 **Multijugador online de 2 a 8 jugadores** con código de sala. Se puede entrar con la partida empezada.
-- 🎯 **Tres modos**: todos contra todos, equipos a bajas y **Bomba** (plantar y desactivar, al estilo CS:GO).
+- 🎯 **Tres modos de combate**: todos contra todos, equipos a bajas y **Bomba** (plantar y desactivar, al estilo CS:GO).
+- 🏁 **Dos minijuegos de carreras** con mapa propio: **Neón Kart** (coches con objetos) y **Carrera de Neón** (parkour).
 - 🤖 **Bots con IA** en tres dificultades: apuntan adelantándose a tu movimiento, esquivan, se cubren y van a por vida cuando están heridos.
 - 💥 **Objetos**: vida, disparo triple, velocidad y escudo.
 - ⚡ **Impulso**: un acelerón rápido para esquivar disparos.
@@ -41,11 +42,11 @@ Se puede jugar **solo contra bots** o **online con hasta 8 personas**. Basta con
 | <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> o flechas | Moverse |
 | Ratón | Apuntar |
 | Clic izquierdo | Disparar (mantén pulsado) |
-| <kbd>Espacio</kbd> o <kbd>Shift</kbd> | Impulso |
+| <kbd>Shift</kbd> o <kbd>Espacio</kbd> | Impulso (en los minijuegos, Espacio salta o derrapa) |
 | <kbd>Tab</kbd> | Clasificación |
 | <kbd>T</kbd> o <kbd>Enter</kbd> | Chat |
 | <kbd>1</kbd> – <kbd>6</kbd> | Emotes: saludar, bailar, pulgar arriba, sí, no y sentarse (moverte los cancela) |
-| <kbd>E</kbd> (mantener) | Plantar o desactivar la bomba |
+| <kbd>E</kbd> | Plantar o desactivar la bomba (mantener) · Usar objeto en el kart |
 | <kbd>Esc</kbd> | Pausa y opciones |
 
 ## Modos de juego
@@ -55,6 +56,8 @@ Se puede jugar **solo contra bots** o **online con hasta 8 personas**. Basta con
 | **Todos contra todos** | El primero que llegue a las bajas elegidas (10, 15 o 25). |
 | **Equipos a bajas** | Rojos contra Azules: el primer equipo que sume las bajas elegidas (20, 30 o 50). |
 | **Bomba** | Por rondas (gana quien llegue a 3, 5 o 7). Un equipo ataca y otro defiende; a mitad de partida se cambian. |
+| **Neón Kart** 🏎️ | Carrera de coches: el primero en completar las vueltas (1, 3 o 5). |
+| **Carrera de Neón** 🏃 | Parkour sobre el vacío: el primero en llegar a la meta. |
 
 **Modo Bomba, paso a paso:**
 1. Al empezar la ronda hay 4 segundos de preparación. Nadie se mueve.
@@ -65,6 +68,19 @@ Se puede jugar **solo contra bots** o **online con hasta 8 personas**. Basta con
 
 Gana la ronda el ataque si la bomba explota o elimina a la defensa; la defensa, si la desactiva, elimina al ataque
 antes de que la planten o se acaba el tiempo (1:40) sin bomba plantada.
+
+**Neón Kart:**
+- **W / S** acelerar y frenar, **A / D** girar.
+- **Espacio** mientras giras para **derrapar**: al soltarlo, mini-turbo (azul si es corto, naranja si es largo).
+- Las **cajas ❓** dan un objeto; se usa con **clic** o **E**: ⚡ turbo, 🚀 misil (persigue al de delante),
+  💣 mina (se deja detrás) y 🛡️ escudo. Los que van detrás sacan mejores objetos.
+- Placas naranjas de turbo y rampas para saltar. Cuando llega el primero, el resto tiene 25 segundos.
+
+**Carrera de Neón (parkour):**
+- **WASD** moverse, **Espacio** saltar, **Shift** impulso (una vez en el aire, para alargar un salto).
+- Tramos: saltos, plataformas que se mueven (rosa), suelo que se cae (naranja), barras láser que te empujan,
+  trampolines (verde), vigas estrechas y un ascensor hasta la meta.
+- Si caes al vacío vuelves al último **punto de control** (arcos amarillos).
 
 ## Cómo jugar con amigos
 
@@ -144,7 +160,10 @@ y abre http://localhost:8000
 ├── index.html          Interfaz: menús, sala de espera y HUD
 ├── src/
 │   ├── main.js         Menús, conexión online, controles y bucle principal
-│   ├── sim.js          Reglas del juego: movimiento, disparos, objetos e IA de los bots
+│   ├── sim.js          Reglas de la arena: movimiento, disparos, objetos, modos e IA de los bots
+│   ├── race.js         Neón Kart: circuito, física de los coches, objetos y bots conductores
+│   ├── parkour.js      Carrera de Neón: recorrido, física de saltos y bots corredores
+│   ├── worlds.js       Gráficos de los mapas de los minijuegos y de los coches
 │   ├── render.js       Gráficos 3D: arena, robots, efectos y cámara
 │   ├── config.js       Ajustes: velocidades, daño, mapa, personajes
 │   ├── audio.js        Música y efectos de sonido

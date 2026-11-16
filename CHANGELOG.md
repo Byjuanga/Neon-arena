@@ -1,5 +1,16 @@
 # Historial de cambios
 
+## 1.5.0: Minijuegos de carreras
+
+- **Neón Kart**: carrera de coches de neón en un circuito nuevo con curvas, rampas, placas de turbo y
+  cajas de objetos (turbo, misil, mina y escudo). Derrape con Espacio y mini-turbo al soltarlo. 1, 3 o 5 vueltas.
+- **Carrera de Neón** (parkour): recorrido flotante sobre el vacío con saltos, plataformas móviles,
+  suelo que se cae, barras láser giratorias, trampolines y un ascensor. Puntos de control al caer.
+- Cada minijuego tiene su propio mapa, su cámara (detrás del coche o del robot) y bots que compiten.
+- Online con predicción del movimiento propio, igual que en la arena.
+- HUD de carrera: posición, vuelta o punto de control, objeto, velocidad y minimapa del recorrido.
+- Pantalla final con los tiempos de llegada.
+
 ## 1.4.1
 
 - Cada versión carga sus archivos con su número de versión, para que el navegador no mezcle

@@ -5,6 +5,8 @@ import {
   BULLET_R, MAX_HP, CHARACTERS, EMOTES, MODES, TEAMS, BOMB, SITES,
 } from './config.js';
 import { Game, moveCircle, pointBlocked, F } from './sim.js';
+import { KartGame, stepCar, carControls, TRACK, KART_ITEMS } from './race.js';
+import { ParkourGame, stepRunner, newRunner, COURSE } from './parkour.js';
 import { Renderer } from './render.js';
 import { initAudio, sfx, setVolume, setMusic, startMusic, stopMusic } from './audio.js';
 
@@ -30,7 +32,11 @@ const prefs = {
   music: store('na.music') !== '0',
 };
 function savePrefs() { for (const [k, v] of Object.entries(prefs)) store('na.' + k, typeof v === 'boolean' ? (v ? '1' : '0') : typeof v === 'object' ? JSON.stringify(v) : v); }
+const goalFor = m => (prefs.goals[m] != null ? prefs.goals[m] : MODES[m].def);
+const isRaceMode = () => !!(MODES[(view.md && view.md.m) || S.settings.mode] || {}).race;
 const MODE_DESC = {
+  kart: 'Carrera de coches de neón. Gana quien complete antes las vueltas. Derrapa con Espacio (al soltarlo, turbo) y usa los objetos de las cajas con clic o E.',
+  parkour: 'Carrera de obstáculos sobre el vacío. Salta con Espacio e impúlsate en el aire con Shift. Si te caes, vuelves al último punto de control.',
   ffa: 'Cada uno por su cuenta. Gana quien llegue antes a las bajas.',
   tdm: 'Rojos contra Azules. Gana el primer equipo que sume las bajas.',
   bomb: 'Rondas sin reaparecer. El ataque planta la bomba en A o B (mantén E) y la defensa la desactiva. A mitad de partida se cambian los papeles.',
@@ -66,20 +72,22 @@ addEventListener('keydown', e => {
   }
   input.keys.add(e.code);
   if (S.phase === 'playing' || S.phase === 'over') {
-    if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') { input.dash = true; input.dashNet = true; e.preventDefault(); }
+    // Espacio: impulso en la arena, saltar en el parkour y derrapar en el kart; Shift: siempre impulso
+    if (e.code === 'Space') { e.preventDefault(); input.jump = true; if (!isRaceMode()) { input.dash = true; input.dashNet = true; } }
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { input.dash = true; input.dashNet = true; e.preventDefault(); }
     if (e.code === 'Tab') { e.preventDefault(); renderScoreboard(); $('scoreboard').hidden = false; }
     const em = /^(Digit|Numpad)([1-9])$/.exec(e.code);
     if (em && +em[2] <= EMOTES.length && S.phase === 'playing' && !S.paused) { input.em = +em[2]; input.emNet = +em[2]; }
     if (e.code === 'Escape' && S.phase === 'playing') togglePause();
-    if (e.code === 'KeyE') input.act = true;
+    if (e.code === 'KeyE') { input.act = true; input.tap = true; input.tapNet = true; } // tap: una pulsación rápida no se pierde
   }
 });
-addEventListener('keyup', e => { input.keys.delete(e.code); if (e.code === 'Tab') $('scoreboard').hidden = true; if (e.code === 'KeyE') input.act = false; });
+addEventListener('keyup', e => { input.keys.delete(e.code); if (e.code === 'Tab') $('scoreboard').hidden = true; if (e.code === 'KeyE') input.act = false; if (e.code === 'Space') input.jump = false; });
 addEventListener('mousemove', e => { input.mx = e.clientX; input.my = e.clientY; const c = $('crosshair'); c.style.transform = `translate(${e.clientX}px,${e.clientY}px)`; });
-addEventListener('mousedown', e => { if (e.button === 0 && S.phase === 'playing' && !S.paused && !chatOpen && !e.target.closest('.panel')) input.fire = true; });
+addEventListener('mousedown', e => { if (e.button === 0 && S.phase === 'playing' && !S.paused && !chatOpen && !e.target.closest('.panel')) { input.fire = true; input.tap = true; input.tapNet = true; } });
 addEventListener('mouseup', e => { if (e.button === 0) input.fire = false; });
 addEventListener('contextmenu', e => { if (S.phase === 'playing') e.preventDefault(); });
-addEventListener('blur', () => { input.keys.clear(); input.fire = false; input.act = false; });
+addEventListener('blur', () => { input.keys.clear(); input.fire = false; input.act = false; input.jump = false; });
 for (const ev of ['keydown', 'keyup', 'mousedown', 'mouseup']) addEventListener(ev, e => { if (!e.repeat) setTimeout(sendGuestInput, 0); });
 
 function moveVec() {
@@ -107,7 +115,8 @@ tickWorker.onmessage = () => hostTick();
 
 function startLocalGame() {
   applyTeamColors();
-  const g = new Game({ mode: S.settings.mode, goal: S.settings.goal, difficulty: S.settings.difficulty });
+  const opts = { mode: S.settings.mode, goal: S.settings.goal, difficulty: S.settings.difficulty };
+  const g = opts.mode === 'kart' ? new KartGame(opts) : opts.mode === 'parkour' ? new ParkourGame(opts) : new Game(opts);
   g.onEvent = e => { pendingEvents.push(e); handleEvent(e); };
   S.game = g; acc = 0; lastTick = performance.now(); stepCount = 0; pendingEvents = []; endSent = false;
   for (const r of S.roster) g.addPlayer(r.id, r.name, r.color, r.bot, r.team);
@@ -123,8 +132,8 @@ function hostTick() {
   while (acc >= STEP) {
     acc -= STEP;
     const [mx, mz] = moveVec();
-    g.setInput(S.myId, { mx, mz, a: input.aim, f: input.fire && !S.paused, d: input.dash, em: input.em, u: input.act && !S.paused });
-    input.dash = false; input.em = 0;
+    g.setInput(S.myId, { mx, mz, a: input.aim, f: input.fire && !S.paused, d: input.dash, em: input.em, u: (input.act || input.tap) && !S.paused, j: input.jump && !S.paused });
+    input.dash = false; input.em = 0; input.tap = false;
     g.step(STEP);
     stepCount++;
     if (S.mode === 'host' && stepCount % SNAP_EVERY === 0) {
@@ -140,8 +149,30 @@ function hostTick() {
   }
 }
 
+// Jugador a partir de su fila del snapshot (lo usan el anfitrión en los minijuegos y los invitados)
+function parsePlayer(a) {
+  const [id, x, z, aim, hp, alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT, emote, emoteN, team, y, ex] = a;
+  const o = { id, x, z, aim, hp, alive: !!alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT, emote, emoteN, team, y: y || 0 };
+  if (ex) { Object.assign(o, ex); if ('g' in ex) o.air = !ex.g; }
+  return o;
+}
+function withRoster(o) {
+  const r = S.roster.find(r => r.id === o.id) || { name: '?', color: '#fff' };
+  o.name = r.name; o.color = r.color; o.char = r.char;
+  return o;
+}
+
 function viewFromGame() {
   const g = S.game;
+  if (g.mode === 'kart' || g.mode === 'parkour') {
+    // los minijuegos se ven a través de su propio snapshot
+    const snap = g.snapshot();
+    view.players.clear();
+    for (const a of snap.p) view.players.set(a[0], withRoster(parsePlayer(a)));
+    view.bullets = snap.b.map(([id, x, z, vx, vz, owner]) => ({ id, x, z, vx, vz, color: (S.roster.find(r => r.id === owner) || {}).color || '#fff' }));
+    view.pickups = []; view.time = g.time; view.T = g.time; view.md = snap.md;
+    return;
+  }
   view.players.clear();
   for (const p of g.players.values()) {
     let f = 0;
@@ -164,7 +195,7 @@ function viewFromGame() {
 const G = { snaps: [], offset: null, pred: null, hist: [], lastSend: 0, localBullets: [], lb: 0, fireCd: 0, me: null };
 
 function resetGuestState() {
-  G.snaps = []; G.offset = null; G.pred = null; G.hist = []; G.localBullets = []; G.fireCd = 0; G.me = null;
+  G.snaps = []; G.offset = null; G.pred = null; G.race = null; G.hist = []; G.localBullets = []; G.fireCd = 0; G.me = null;
 }
 
 function onSnapshot(s) {
@@ -172,10 +203,7 @@ function onSnapshot(s) {
   const off = s.time - now;
   G.offset = G.offset == null ? off : (off > G.offset ? G.offset + (off - G.offset) * 0.05 : off);
   const players = new Map();
-  for (const a of s.p) {
-    const [id, x, z, aim, hp, alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT, emote, emoteN, team] = a;
-    players.set(id, { id, x, z, aim, hp, alive: !!alive, flags, kills, deaths, seq, dashCd, triple, speed, shield, respawnT, emote, emoteN, team });
-  }
+  for (const a of s.p) players.set(a[0], parsePlayer(a));
   const bullets = new Map();
   for (const [id, x, z, vx, vz, owner] of s.b) bullets.set(id, { id, x, z, vx, vz, owner });
   G.snaps.push({ time: s.time, players, bullets });
@@ -186,7 +214,8 @@ function onSnapshot(s) {
 
   // corrección de la predicción propia
   const me = players.get(S.myId);
-  if (me) {
+  if (me && s.md && MODES[s.md.m] && MODES[s.md.m].race) reconcileRace(me, s.md.m);
+  else if (me) {
     G.me = me;
     if (!me.alive) G.pred = null;
     else if (!G.pred) G.pred = { x: me.x, z: me.z, dashT: 0, dashX: 0, dashZ: 0, dashCd: me.dashCd };
@@ -207,14 +236,45 @@ function onSnapshot(s) {
   for (const e of s.ev || []) handleEvent(e);
 }
 
+// ---------- Predicción en los minijuegos ----------
+// Estado completo del coche o del corredor a partir de lo que dice el anfitrión
+function raceFromServer(me, m) {
+  if (m === 'kart') {
+    return { x: me.x, z: me.z, h: me.aim, sp: me.sp || 0, vx: me.vx || 0, vz: me.vz || 0, y: me.y, vy: me.vy || 0, boost: me.bo || 0, spin: me.sv || 0,
+      drifting: !!me.dr, driftDir: me.dr || 0, driftT: me.dt || 0, seg: me.seg || 0, dist: me.dist || 0, s: (((me.dist || 0) % TRACK.L) + TRACK.L) % TRACK.L, m };
+  }
+  return Object.assign(newRunner(me.x, me.y, me.z), { vx: me.vx || 0, vz: me.vz || 0, vy: me.vy || 0, kx: me.kx || 0, kz: me.kz || 0,
+    onG: !me.air, stand: me.st != null ? me.st : -1, dashUsed: !!me.du, aim: me.aim, m });
+}
+function reconcileRace(me, m) {
+  if (!G.race || G.race.m !== m) { G.race = raceFromServer(me, m); G.hist = []; return; }
+  const p = G.race, h = G.hist.find(h => h.seq === me.seq);
+  if (h) {
+    const ex = me.x - h.x, ez = me.z - h.z, ey = me.y - h.y;
+    if (Math.hypot(ex, ey, ez) > 3) { G.race = raceFromServer(me, m); G.hist = []; return; }
+    const cx = ex * 0.4, cz = ez * 0.4, cy = ey * 0.4;
+    let ch = 0, cs = 0;
+    if (m === 'kart') { let dh = me.aim - h.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); ch = dh * 0.4; cs = ((me.sp || 0) - h.sp) * 0.4; }
+    p.x += cx; p.z += cz; p.y += cy; if (m === 'kart') { p.h += ch; p.sp += cs; }
+    for (const k of G.hist) if (k.seq > me.seq) { k.x += cx; k.z += cz; k.y += cy; k.h += ch; k.sp += cs; }
+  }
+  G.hist = G.hist.filter(k => k.seq > me.seq);
+  // lo que solo sabe el anfitrión: trompos y turbos de objetos
+  if (m === 'kart') {
+    if ((me.sv || 0) > 0.1 && p.spin <= 0) p.spin = me.sv;
+    if ((me.bo || 0) > p.boost + 0.3) p.boost = me.bo;
+  }
+}
+
 function sendGuestInput() {
   if (S.mode !== 'guest' || !S.hostConn || !S.hostConn.open || S.phase !== 'playing') return;
   G.lastSend = performance.now() / 1000;
   const [mx, mz] = moveVec();
   const seq = ++S.guestSeq;
-  S.hostConn.send({ t: 'in', seq, mx, mz, a: +input.aim.toFixed(3), f: input.fire && !S.paused, d: !!input.dashNet, em: input.emNet || 0, u: !!input.act });
-  input.emNet = 0;
-  if (G.pred) G.hist.push({ seq, x: G.pred.x, z: G.pred.z });
+  S.hostConn.send({ t: 'in', seq, mx, mz, a: +input.aim.toFixed(3), f: input.fire && !S.paused, d: !!input.dashNet, em: input.emNet || 0, u: !!(input.act || input.tapNet), j: !!input.jump });
+  input.emNet = 0; input.tapNet = false;
+  if (G.race) G.hist.push({ seq, x: G.race.x, z: G.race.z, y: G.race.y || 0, h: G.race.h || 0, sp: G.race.sp || 0 });
+  else if (G.pred) G.hist.push({ seq, x: G.pred.x, z: G.pred.z });
   if (G.hist.length > 120) G.hist.shift();
   input.dashNet = false;
 }
@@ -222,11 +282,23 @@ function sendGuestInput() {
 function guestFrame(dt) {
   const now = performance.now() / 1000;
   // durante la cuenta atrás de la ronda nadie se mueve ni dispara
-  const frozen = view.md && view.md.m === 'bomb' && view.md.ph === 'freeze';
+  const frozen = view.md && (view.md.m === 'bomb' || MODES[view.md.m].race) && view.md.ph === 'freeze';
   const [mx, mz] = frozen ? [0, 0] : moveVec();
   const me = G.me;
+  const raceM = view.md && MODES[view.md.m] && MODES[view.md.m].race ? view.md.m : null;
+  if (G.offset != null) view.T = now + G.offset;
+  // predicción del coche o del corredor propio con la misma física que el anfitrión
+  if (raceM && G.race && S.phase === 'playing') {
+    const done = me && me.fin != null;
+    if (raceM === 'kart') stepCar(G.race, frozen ? { thr: 0, steer: 0, drift: false } : { ...carControls(mx, mz), drift: input.jump }, dt);
+    else {
+      const tiles = new Map(((view.md && view.md.tiles) || []).map(([i, st, t]) => [i, { st, t }]));
+      const inp = frozen || done ? { mx: 0, mz: 0, j: false, d: false } : { mx, mz, j: input.jump, d: input.dash };
+      stepRunner(G.race, inp, dt, { T: view.T, tiles });
+    }
+  }
   // predicción del movimiento propio
-  if (G.pred && me && me.alive && S.phase === 'playing') {
+  if (!raceM && G.pred && me && me.alive && S.phase === 'playing') {
     const p = G.pred;
     p.dashCd -= dt;
     if (input.dash && p.dashCd <= 0) {
@@ -273,9 +345,14 @@ function guestFrame(dt) {
     const latest = G.snaps[G.snaps.length - 1].players.get(pb.id) || pb;
     const v = {
       ...latest, name: r.name, color: r.color, char: r.char,
-      x: lerp(pa.x, pb.x), z: lerp(pa.z, pb.z), aim: lerpA(pa.aim, pb.aim), flags: pb.flags,
+      x: lerp(pa.x, pb.x), z: lerp(pa.z, pb.z), y: lerp(pa.y || 0, pb.y || 0), aim: lerpA(pa.aim, pb.aim), flags: pb.flags,
     };
-    if (pb.id === S.myId) {
+    if (pb.id === S.myId && raceM && G.race) {
+      const p = G.race;
+      v.x = p.x; v.z = p.z; v.y = p.y;
+      if (raceM === 'kart') { v.aim = p.h; v.sp = p.sp; v.dr = p.drifting ? p.driftDir : 0; v.dt = p.driftT; v.flags = (latest.flags & ~F.DASH) | (p.boost > 0 ? F.DASH : 0); }
+      else { v.aim = p.aim; v.air = !p.onG; v.flags = (latest.flags & ~(F.MOVING | F.DASH)) | (Math.hypot(p.vx, p.vz) > 0.5 ? F.MOVING : 0) | (p.dashT > 0 ? F.DASH : 0); }
+    } else if (pb.id === S.myId) {
       v.aim = input.aim;
       if (G.pred && latest.alive) { v.x = G.pred.x; v.z = G.pred.z; v.flags = (latest.flags & ~(F.MOVING | F.DASH)) | (G.pred.moving ? F.MOVING : 0) | (G.pred.dashT > 0 ? F.DASH : 0); v.alive = true; }
       else { v.x = latest.x; v.z = latest.z; v.alive = latest.alive; }
@@ -285,9 +362,10 @@ function guestFrame(dt) {
   // balas: las ajenas interpoladas, las propias simuladas en local
   const bl = [];
   for (const bb of b.bullets.values()) {
-    if (bb.owner === S.myId) continue;
+    if (bb.owner === S.myId && !raceM) continue;
     const ba = a.bullets.get(bb.id);
     const r = S.roster.find(r => r.id === bb.owner);
+    if (raceM) { bl.push({ id: bb.id, x: ba ? lerp(ba.x, bb.x) : bb.x, z: ba ? lerp(ba.z, bb.z) : bb.z, vx: bb.vx, vz: bb.vz, color: r ? r.color : '#fff' }); continue; }
     const x = ba ? lerp(ba.x, bb.x) : bb.x - bb.vx * (b.time - rt);
     const z = ba ? lerp(ba.z, bb.z) : bb.z - bb.vz * (b.time - rt);
     bl.push({ id: bb.id, x, z, vx: bb.vx, vz: bb.vz, color: r ? r.color : '#fff' });
@@ -432,6 +510,26 @@ function handleEvent(e) {
     case 'explode': sfx.explode(); break;
     case 'bombPick': if (e.id === S.myId) announce('💣 Has cogido la bomba', 1500); break;
     case 'bombDrop': if (view.md && myTeam === view.md.atk) announce('¡La bomba está en el suelo!', 1500); break;
+    // minijuegos
+    case 'lap': if (e.id === S.myId) { const goal = (view.md && view.md.goal) || 3; announce(e.lap === goal ? '¡Última vuelta!' : `Vuelta ${e.lap}/${goal}`, 1800); sfx.round(); } break;
+    case 'finish': {
+      const n = nameOf(e.id);
+      if (e.id === S.myId) { announce(e.pos === 1 ? '¡Primero! 🏆' : `¡Has llegado ${e.pos}.º!`, 3000); e.pos === 1 ? sfx.win() : sfx.myKill(); }
+      else { announce(`${n.name} llega ${e.pos}.º`, 1600); }
+      addKillfeed(`🏁 <span style="color:${n.color}">${esc(n.name)}</span> ${e.pos}.º · ${fmtTime(e.time)}`, e.id === S.myId);
+      break;
+    }
+    case 'item': if (e.id === S.myId) { sfx.pickup(); announce(`${KART_ITEMS[e.item].icon} ${KART_ITEMS[e.item].label}`, 1000); } break;
+    case 'useItem': if (e.id === S.myId) ({ misil: sfx.shot, mina: sfx.click, turbo: sfx.dash, escudo: sfx.pickup }[e.item] || sfx.click)(); break;
+    case 'spin':
+      if (e.id === S.myId) { sfx.hurt(); flashDamage(); announce('¡Trompo!', 900); }
+      else if (e.by === S.myId) { sfx.hit(); announce('¡Le has dado!', 900); }
+      break;
+    case 'boost': if (e.id === S.myId) sfx.dash(); break;
+    case 'zap': if (e.id === S.myId) { sfx.hurt(); flashDamage(); } break;
+    case 'fall': if (e.id === S.myId) { sfx.lose(); announce('¡Al vacío! Vuelves al punto de control', 1600); } break;
+    case 'checkpoint': if (e.id === S.myId) { sfx.pickup(); announce(`Punto de control ${e.cp}`, 1400); } break;
+    case 'bounce': if (e.id === S.myId) sfx.go(); break;
     case 'roundEnd': {
       const why = { defuse: 'bomba desactivada', explode: 'la bomba ha explotado', elim: 'equipo eliminado', time: 'se acabó el tiempo' }[e.reason] || '';
       announce(`${e.w === myTeam ? '¡Ronda ganada!' : 'Ronda perdida'} · ${why}`, 3500);
@@ -454,10 +552,33 @@ function flashDamage() { const v = $('vignette'); v.style.opacity = 0.55; clearT
 
 // ================== HUD ==================
 let hudT = 0;
+function fmtTime(t) { return t == null ? 'No terminó' : Math.floor(t / 60) + ':' + (t % 60).toFixed(2).padStart(5, '0'); }
+const ordinal = n => n + '.º';
+
+// HUD de las carreras: posición, vuelta o punto de control, objeto y velocidad
+function updateRaceHud(me) {
+  const md = view.md; if (!md) return;
+  const order = md.order || [], n = view.players.size;
+  const pos = order.indexOf(S.myId) + 1;
+  $('racePos').innerHTML = pos ? `${ordinal(pos)}<small>/${n}</small>` : '';
+  if (me && me.fin != null) $('raceInfo').textContent = `🏁 Meta · ${fmtTime(me.fin)}`;
+  else if (md.m === 'kart') $('raceInfo').textContent = `Vuelta ${Math.min(md.goal, (me && me.lap) || 1)}/${md.goal}`;
+  else $('raceInfo').textContent = `Punto de control ${(me && me.cp) || 0}/${COURSE.cpCount - 1}`;
+  const it = me && md.m === 'kart' && me.it;
+  $('raceItem').hidden = !it;
+  if (it) { $('raceItemIcon').textContent = KART_ITEMS[it].icon; $('raceItemName').textContent = KART_ITEMS[it].label.toUpperCase(); }
+  $('raceSpeed').textContent = md.m === 'kart' && me ? Math.round(Math.abs(me.sp || 0) * 4.2) + ' km/h' : '';
+}
+
 function updateHud(dt) {
   hudT -= dt;
   const me = view.players.get(S.myId);
-  if (me) {
+  const race = isRaceMode();
+  document.body.classList.toggle('race', race);
+  document.body.classList.toggle('kart', race && !!view.md && view.md.m === 'kart');
+  $('raceHud').hidden = !race;
+  if (race) { $('respawn').hidden = true; $('action').hidden = true; updateRaceHud(me); }
+  else if (me) {
     const hp = me.alive ? me.hp : 0;
     $('hpbar').firstElementChild.style.width = (hp / MAX_HP * 100) + '%';
     $('hpbar').className = hp > 50 ? '' : hp > 25 ? 'mid' : 'low';
@@ -471,13 +592,18 @@ function updateHud(dt) {
     $('respawnT').hidden = waitRound;
     $('respawnT').textContent = Math.max(1, Math.ceil(me.respawnT || 0));
   }
-  updateAction(me);
-  bombBeeps(dt);
+  if (!race) { updateAction(me); bombBeeps(dt); }
   if (hudT > 0) return;
   hudT = 0.2;
   updateModeHud();
-  const list = [...view.players.values()].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
-  $('mini-board').innerHTML = list.slice(0, 5).map(p => `<div class="${p.id === S.myId ? 'me' : ''}" style="--c:${p.color}"><span>${esc(p.name)}</span><b>${p.kills}</b></div>`).join('');
+  if (race && view.md) {
+    // clasificación de la carrera: posición y vuelta, o tiempo si ya llegó
+    const list = (view.md.order || []).map(id => view.players.get(id)).filter(Boolean);
+    $('mini-board').innerHTML = list.slice(0, 6).map((p, i) => `<div class="${p.id === S.myId ? 'me' : ''} ${p.fin != null ? 'done' : ''}" style="--c:${p.color}"><span>${i + 1}. ${esc(p.name)}</span><b>${p.fin != null ? fmtTime(p.fin) : view.md.m === 'kart' ? 'V' + (p.lap || 1) : 'PC' + (p.cp || 0)}</b></div>`).join('');
+  } else {
+    const list = [...view.players.values()].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+    $('mini-board').innerHTML = list.slice(0, 5).map(p => `<div class="${p.id === S.myId ? 'me' : ''}" style="--c:${p.color}"><span>${esc(p.name)}</span><b>${p.kills}</b></div>`).join('');
+  }
   if (me) {
     const pw = [];
     if (me.triple > 0) pw.push(['Triple', me.triple, PICKUP_INFO.triple.color]);
@@ -498,7 +624,12 @@ function updateModeHud() {
     const t = i => `<span class="t${i}"><small>${teamName(i).toUpperCase()}</small> ${md.sc[i]}</span>`;
     $('teamScore').innerHTML = `${t(0)}<span class="vs">–</span>${t(1)}`;
   }
-  if (mode === 'bomb' && md) {
+  if (MODES[mode].race && md) {
+    if (md.ph === 'freeze') { timer.textContent = md.pt > 3 ? 'Preparados' : String(Math.ceil(md.pt)); }
+    else timer.textContent = clock(md.rt);
+    $('goal').textContent = md.endT >= 0 ? `¡Fin de la carrera en ${Math.ceil(md.endT)} s!`
+      : mode === 'kart' ? `${MODES.kart.label} · ${md.goal} ${md.goal === 1 ? 'vuelta' : 'vueltas'}` : MODES.parkour.label;
+  } else if (mode === 'bomb' && md) {
     const b = md.bomb;
     if (md.ph === 'freeze') timer.textContent = 'Preparados · ' + Math.ceil(md.pt);
     else if (b[0] === 'planted') { timer.textContent = '💣 ' + clock(b[5]); timer.classList.add('bomb'); }
@@ -542,7 +673,38 @@ function bombBeeps(dt) {
 }
 
 const mm = $('minimap').getContext('2d');
+// Minimapa de los minijuegos: el circuito o el recorrido visto desde arriba
+function drawRaceMap(md) {
+  const W = 200;
+  mm.clearRect(0, 0, W, W);
+  let X, Z;
+  if (md.m === 'kart') {
+    const xs = TRACK.pts.map(p => p.x), zs = TRACK.pts.map(p => p.z);
+    const minX = Math.min(...xs) - 8, maxX = Math.max(...xs) + 8, minZ = Math.min(...zs) - 8, maxZ = Math.max(...zs) + 8;
+    const sc = (W - 10) / Math.max(maxX - minX, maxZ - minZ);
+    X = x => 5 + (x - minX) * sc; Z = z => 5 + (z - minZ) * sc;
+    mm.strokeStyle = '#2a3170'; mm.lineWidth = 7; mm.lineJoin = 'round';
+    mm.beginPath(); TRACK.pts.forEach((p, i) => i ? mm.lineTo(X(p.x), Z(p.z)) : mm.moveTo(X(p.x), Z(p.z))); mm.closePath(); mm.stroke();
+    const st = TRACK.pts[0]; mm.fillStyle = '#fff'; mm.fillRect(X(st.x) - 1.5, Z(st.z) - 5, 3, 10);
+  } else {
+    // el recorrido es largo: se gira para que vaya de abajo (salida) a arriba (meta)
+    const sc = (W - 10) / 200;
+    X = x => W / 2 + x * sc * 2.2; Z = z => W - 8 + (z - 8) * sc;
+    for (const p of COURSE.plats) {
+      mm.fillStyle = { cp: '#ffd40099', finish: '#ffd400', fall: '#ff6a1f88', move: '#ff2bd688', bounce: '#39ff6a99' }[p.type] || '#2a3170';
+      mm.fillRect(X(p.x - p.w / 2), Z(p.z - p.d / 2), Math.max(2, p.w * sc * 2.2), Math.max(2, p.d * sc));
+    }
+  }
+  for (const p of view.players.values()) {
+    const me = p.id === S.myId;
+    mm.beginPath(); mm.arc(X(p.x), Z(p.z), me ? 5 : 3.5, 0, Math.PI * 2);
+    mm.fillStyle = p.color; mm.fill();
+    if (me) { mm.strokeStyle = '#fff'; mm.lineWidth = 2; mm.stroke(); }
+  }
+}
+
 function drawMinimap() {
+  if (view.md && MODES[view.md.m] && MODES[view.md.m].race) return drawRaceMap(view.md);
   const W = 200, s = W / (HALF * 2), X = x => (x + HALF) * s;
   mm.clearRect(0, 0, W, W);
   mm.fillStyle = '#2a3170';
@@ -584,8 +746,18 @@ function playerTable(list, score, numbered) {
   return head + [0, 1].map(t => `<tr class="team-row" style="--c:${TEAMS[t].color}"><td colspan="${numbered ? 2 : 1}">${TEAMS[t].name.toUpperCase()}</td><td class="n" colspan="2">${score[t]}</td></tr>` +
     sorted.filter(p => p.team === t).map(row).join('')).join('');
 }
+// Tabla de carrera: posición y tiempo (y caídas en el parkour)
+function raceTable(list, mode) {
+  const falls = mode === 'parkour';
+  return `<tr><th>#</th><th>Jugador</th><th class="n">Tiempo</th>${falls ? '<th class="n">Caídas</th>' : ''}</tr>` +
+    list.map((p, i) => `<tr class="${p.id === S.myId ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="--c:${p.color}"></span>${esc(p.name)}</td><td class="n">${fmtTime(p.time != null ? p.time : p.fin)}</td>${falls ? `<td class="n">${p.deaths}</td>` : ''}</tr>`).join('');
+}
 function renderScoreboard() {
   const md = view.md;
+  if (md && MODES[md.m] && MODES[md.m].race) {
+    $('scoreTable').innerHTML = raceTable((md.order || []).map(id => view.players.get(id)).filter(Boolean), md.m);
+    return;
+  }
   $('scoreTable').innerHTML = playerTable([...view.players.values()], md && MODES[md.m].teams ? md.sc : null, false);
 }
 
@@ -614,12 +786,14 @@ function onEnd(msg) {
   won ? sfx.win() : sfx.lose();
   stopMusic();
   const w = msg.ranking[0];
-  if (teams) {
+  if (MODES[msg.mode] && MODES[msg.mode].race) {
+    $('endTitle').innerHTML = won ? '¡Has ganado la carrera! 🏆' : (w ? `<span style="color:${w.color}">${esc(w.name)}</span> gana la carrera` : 'Fin de la carrera');
+  } else if (teams) {
     const t = TEAMS[msg.winnerTeam];
     $('endTitle').innerHTML = msg.winnerTeam < 0 ? `Empate · ${msg.score[0]} – ${msg.score[1]}`
       : `${won ? '¡Habéis ganado!' : `Ganan los <span style="color:${t.color}">${t.name}</span>`} · ${msg.score[0]} – ${msg.score[1]}`;
   } else $('endTitle').innerHTML = won ? '¡Has ganado!' : (w ? `<span style="color:${w.color}">${esc(w.name)}</span> gana` : 'Fin');
-  $('endTable').innerHTML = playerTable(msg.ranking, teams ? msg.score : null, !teams);
+  $('endTable').innerHTML = MODES[msg.mode] && MODES[msg.mode].race ? raceTable(msg.ranking, msg.mode) : playerTable(msg.ranking, teams ? msg.score : null, !teams);
   const canRestart = S.mode !== 'guest';
   $('btnAgain').hidden = !canRestart;
   $('endHint').textContent = canRestart ? '' : 'Esperando a que el anfitrión pida revancha…';
@@ -661,7 +835,7 @@ function leave(msg) {
 function startSolo() {
   savePrefs();
   S.mode = 'solo'; S.myId = 'h';
-  S.settings = { mode: prefs.mode, goal: prefs.goals[prefs.mode], difficulty: prefs.diff };
+  S.settings = { mode: prefs.mode, goal: goalFor(prefs.mode), difficulty: prefs.diff };
   S.roster = [{ id: 'h', name: myName(), color: COLORS[prefs.color], pcolor: COLORS[prefs.color], team: 0, bot: false, char: CHARACTERS[0].id }];
   for (let i = 0; i < prefs.bots; i++) addBotToRoster();
   enterGame();
@@ -707,7 +881,7 @@ function createRoom() {
   p.on('open', () => {
     if (S.peer !== p) return;
     S.mode = 'host'; S.code = code; S.myId = 'h'; S.phase = 'lobby';
-    S.settings = { mode: prefs.mode, goal: prefs.goals[prefs.mode], difficulty: prefs.diff };
+    S.settings = { mode: prefs.mode, goal: goalFor(prefs.mode), difficulty: prefs.diff };
     S.roster = [{ id: 'h', name: myName(), color: COLORS[prefs.color], pcolor: COLORS[prefs.color], team: 0, bot: false, char: CHARACTERS[0].id }];
     applyTeamColors();
     showLobby();
@@ -865,13 +1039,14 @@ function showLobby() {
   $('btnStart').disabled = !teamsReady();
   const mode = S.settings.mode;
   renderSeg('lobMode', Object.entries(MODES).map(([k, v]) => [k, v.short]), mode, isHost ? v => {
-    S.settings.mode = v; S.settings.goal = prefs.goals[v]; prefs.mode = v; savePrefs();
+    S.settings.mode = v; S.settings.goal = goalFor(v); prefs.mode = v; savePrefs();
     balanceTeams(); applyTeamColors(); showLobby();
   } : null);
   $('lobModeDesc').textContent = MODE_DESC[mode];
-  $('lobGoalLabel').textContent = MODES[mode].goalLabel;
+  $('lobGoalRow').hidden = !MODES[mode].goals;
+  $('lobGoalLabel').textContent = MODES[mode].goalLabel || '';
   renderSeg('lobDiff', Object.entries(DIFFICULTY).map(([k, v]) => [k, v.label]), S.settings.difficulty, isHost ? v => { S.settings.difficulty = v; prefs.diff = v; showLobby(); } : null);
-  renderSeg('lobKills', MODES[mode].goals.map(k => [k, String(k)]), S.settings.goal, isHost ? v => { S.settings.goal = v; prefs.goals[mode] = v; savePrefs(); showLobby(); } : null);
+  renderSeg('lobKills', (MODES[mode].goals || []).map(k => [k, String(k)]), S.settings.goal, isHost ? v => { S.settings.goal = v; prefs.goals[mode] = v; savePrefs(); showLobby(); } : null);
   $('lobbyHint').textContent = isHost
     ? (S.roster.length < 2 ? 'Invita a tus amigos con el código o añade bots.'
       : !teamsReady() ? 'Cada equipo necesita al menos un jugador o un bot.'
@@ -889,10 +1064,11 @@ function renderSeg(id, opts, cur, onPick) {
 function renderSoloSetup() {
   renderSeg('segMode', Object.entries(MODES).map(([k, v]) => [k, v.short]), prefs.mode, v => { prefs.mode = v; savePrefs(); renderSoloSetup(); });
   $('soloModeDesc').textContent = MODE_DESC[prefs.mode] + (MODES[prefs.mode].teams ? ' Los bots se reparten entre tu equipo y el rival.' : '');
-  $('soloGoalLabel').textContent = MODES[prefs.mode].goalLabel;
+  $('soloGoalRow').hidden = !MODES[prefs.mode].goals;
+  $('soloGoalLabel').textContent = MODES[prefs.mode].goalLabel || '';
   renderSeg('segBots', [1, 2, 3, 4, 5, 6, 7].map(n => [n, String(n)]), prefs.bots, v => { prefs.bots = v; renderSoloSetup(); });
   renderSeg('segDiff', Object.entries(DIFFICULTY).map(([k, v]) => [k, v.label]), prefs.diff, v => { prefs.diff = v; renderSoloSetup(); });
-  renderSeg('segKills', MODES[prefs.mode].goals.map(k => [k, String(k)]), prefs.goals[prefs.mode], v => { prefs.goals[prefs.mode] = v; savePrefs(); renderSoloSetup(); });
+  renderSeg('segKills', (MODES[prefs.mode].goals || []).map(k => [k, String(k)]), goalFor(prefs.mode), v => { prefs.goals[prefs.mode] = v; savePrefs(); renderSoloSetup(); });
 }
 function renderSwatches() {
   $('swatches').innerHTML = COLORS.map((c, i) => `<button style="--c:${c}" class="${i === prefs.color ? 'on' : ''}" data-i="${i}" aria-label="Color ${i + 1}"></button>`).join('');
@@ -1002,7 +1178,7 @@ function frame(now) {
     if (S.mode === 'guest') guestFrame(dt);
     else if (S.game) viewFromGame();
     const me = view.players.get(S.myId);
-    const [ax, az] = updateAim(me);
+    const [ax, az] = isRaceMode() ? [0, 0] : updateAim(me);
     if (view.victory) {
       const w = view.players.get([...view.victory][0]);
       if (w) view.focus = { x: w.x, z: w.z };
@@ -1011,7 +1187,7 @@ function frame(now) {
       const mate = [...view.players.values()].find(p => p.alive && p.team === me.team);
       const f = mate || me;
       view.focus = { x: f.x, z: f.z };
-    } else if (me) view.focus = { x: me.x, z: me.z, ax: me.alive ? ax : 0, az: me.alive ? az : 0 };
+    } else if (me) view.focus = { x: me.x, z: me.z, y: me.y || 0, h: me.aim, ax: me.alive ? ax : 0, az: me.alive ? az : 0 };
     updateHud(dt);
   } else {
     // fondo del menú: la arena vacía girando

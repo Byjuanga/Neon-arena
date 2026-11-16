@@ -15,17 +15,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="src/style.css?v=1.4.1">
+<link rel="stylesheet" href="src/style.css?v=1.5.0">
 <!-- Versión de los archivos del juego: al publicar cambios se sube este número (aquí, en style.css y en main.js)
      para que el navegador no mezcle archivos nuevos con copias antiguas guardadas -->
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
   "three/addons/": "./vendor/three/addons/",
-  "./src/config.js": "./src/config.js?v=1.4.1",
-  "./src/sim.js": "./src/sim.js?v=1.4.1",
-  "./src/render.js": "./src/render.js?v=1.4.1",
-  "./src/audio.js": "./src/audio.js?v=1.4.1"
+  "./src/config.js": "./src/config.js?v=1.5.0",
+  "./src/sim.js": "./src/sim.js?v=1.5.0",
+  "./src/render.js": "./src/render.js?v=1.5.0",
+  "./src/audio.js": "./src/audio.js?v=1.5.0",
+  "./src/race.js": "./src/race.js?v=1.5.0",
+  "./src/parkour.js": "./src/parkour.js?v=1.5.0",
+  "./src/worlds.js": "./src/worlds.js?v=1.5.0"
 } }
 </script>
 <script src="vendor/peerjs.min.js"></script>
@@ -47,7 +50,7 @@
   <div class="menu-wrap">
     <div class="menu-left">
       <h1 class="logo big">NEÓN<span>ARENA</span></h1>
-      <p class="tag">Duelo de robots en una arena de neón · 1 a 8 jugadores <span class="ver">v1.4.1</span></p>
+      <p class="tag">Duelo de robots en una arena de neón · 1 a 8 jugadores <span class="ver">v1.5.0</span></p>
       <div class="field">
         <label for="apodo">Apodo</label>
         <input id="apodo" type="search" maxlength="14" placeholder="Escribe tu apodo" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other">
@@ -72,7 +75,9 @@
           <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Moverse</td></tr>
           <tr><td><kbd>Ratón</kbd></td><td>Apuntar</td></tr>
           <tr><td><kbd>Clic izq.</kbd></td><td>Disparar (mantén pulsado)</td></tr>
-          <tr><td><kbd>Espacio</kbd> / <kbd>Shift</kbd></td><td>Impulso (esquiva rápida)</td></tr>
+          <tr><td><kbd>Shift</kbd> / <kbd>Espacio</kbd></td><td>Impulso (esquiva rápida)</td></tr>
+          <tr><td><kbd>Espacio</kbd></td><td>Saltar (parkour) · Derrapar (kart)</td></tr>
+          <tr><td><kbd>Clic</kbd> / <kbd>E</kbd></td><td>Usar objeto (kart)</td></tr>
           <tr><td><kbd>Tab</kbd></td><td>Clasificación</td></tr>
           <tr><td><kbd>T</kbd> / <kbd>Enter</kbd></td><td>Chat</td></tr>
           <tr><td><kbd>1</kbd> – <kbd>6</kbd></td><td>Emotes (moverte los cancela)</td></tr>
@@ -109,7 +114,7 @@
     <p class="muted small mode-desc" id="soloModeDesc"></p>
     <div class="opt"><label>Bots</label><div class="seg" id="segBots"></div></div>
     <div class="opt"><label>Dificultad</label><div class="seg" id="segDiff"></div></div>
-    <div class="opt"><label id="soloGoalLabel">Bajas para ganar</label><div class="seg" id="segKills"></div></div>
+    <div class="opt" id="soloGoalRow"><label id="soloGoalLabel">Bajas para ganar</label><div class="seg" id="segKills"></div></div>
     <div class="row">
       <button class="btn ghost" data-back>Volver</button>
       <button class="btn primary" id="btnSoloGo">¡A luchar!</button>
@@ -151,7 +156,7 @@
         <div class="opt"><label>Modo</label><div class="seg" id="lobMode"></div></div>
         <p class="muted small mode-desc" id="lobModeDesc"></p>
         <div class="opt"><label>Dificultad de bots</label><div class="seg" id="lobDiff"></div></div>
-        <div class="opt"><label id="lobGoalLabel">Bajas para ganar</label><div class="seg" id="lobKills"></div></div>
+        <div class="opt" id="lobGoalRow"><label id="lobGoalLabel">Bajas para ganar</label><div class="seg" id="lobKills"></div></div>
         <button class="btn" id="btnAddBot">+ Añadir bot</button>
         <button class="btn primary" id="btnStart">Empezar partida</button>
         <p class="muted small" id="lobbyHint"></p>
@@ -166,6 +171,12 @@
   <div id="killfeed"></div>
   <div id="topcenter"><div id="teamScore" hidden></div><div id="timer">5:00</div><div class="muted small" id="goal"></div></div>
   <div id="action" hidden><div id="actionText"></div><div id="actionBar"><i></i></div></div>
+  <div id="raceHud" hidden>
+    <div id="racePos"></div>
+    <div id="raceInfo"></div>
+    <div id="raceItem" hidden><span id="raceItemIcon"></span><small id="raceItemName"></small><kbd>Clic</kbd></div>
+    <div id="raceSpeed"></div>
+  </div>
   <div id="mini-board"></div>
   <div id="announce"></div>
   <div id="respawn" hidden><div id="respawnText">Has sido eliminado</div><b id="respawnT">3</b></div>
@@ -218,6 +229,6 @@
 
 <div id="fps" hidden></div>
 <div id="toast"></div>
-<script type="module" src="src/main.js?v=1.4.1"></script>
+<script type="module" src="src/main.js?v=1.5.0"></script>
 </body>
 </html>
