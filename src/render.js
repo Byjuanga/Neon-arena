@@ -10,7 +10,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildKartWorld, makeCar, buildParkourWorld } from './worlds.js';
 import { platPos, tileDrop, laserAngle } from './parkour.js';
-import { HALF, BOXES, PICKUP_SPOTS, PICKUP_INFO, CHARACTERS, MAX_HP, EMOTES, SITES, BOMB } from './config.js';
+import { HALF, BOXES, PICKUP_SPOTS, PICKUP_INFO, CHARACTERS, MAX_HP, EMOTES, SITES, BOMB, KART_MODEL } from './config.js';
 import { F } from './sim.js';
 
 const AIM_Y = 1.1;
@@ -142,6 +142,44 @@ export class Renderer {
       gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; } });
       this.chars[c.id] = { cfg: c, gltf, scale: c.scale || c.height / h };
     }
+    // modelo del kart (si falla, los karts se dibujan con cajas)
+    try {
+      const k = await loader.loadAsync(KART_MODEL.url);
+      this.kartModel = k.scene;
+    } catch (e) { console.warn('No se pudo cargar el modelo del kart', e); }
+  }
+
+  // Pinta un personaje del color del jugador (materiales propios para cada copia)
+  tintCharacter(model, ch, color) {
+    const tune = src => {
+      const m = src.clone();
+      m.metalness = Math.min(m.metalness, 0.4);
+      m.roughness = Math.max(m.roughness, 0.35);
+      m.envMapIntensity = 0.6;
+      if (m.name === ch.cfg.tint) {
+        m.color = color.clone().multiplyScalar(0.8);
+        m.emissive = color.clone().multiplyScalar(0.35);
+      }
+      return m;
+    };
+    model.traverse(o => { if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map(tune) : tune(o.material); });
+  }
+
+  // Robot sentado al volante del kart (pose fija de la animación de sentarse)
+  makeDriver(color) {
+    const ch = Object.values(this.chars)[0];
+    if (!ch) return null;
+    const d = KART_MODEL.driver;
+    const model = SkeletonUtils.clone(ch.gltf.scene);
+    model.scale.setScalar(ch.scale * d.size);
+    model.position.set(d.x, d.y, d.z);
+    this.tintCharacter(model, ch, new THREE.Color(color));
+    const clip = THREE.AnimationClip.findByName(ch.gltf.animations, ch.cfg.anims.sit);
+    if (clip) {
+      const mixer = new THREE.AnimationMixer(model), a = mixer.clipAction(clip);
+      a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; a.play(); mixer.update(5);
+    }
+    return model;
   }
 
   // alta: todo · media: resolución normal · baja: sin sombras ni brillo
@@ -354,8 +392,10 @@ export class Renderer {
       seen.add(p.id);
       let car = this.cars.get(p.id);
       if (!car) {
-        car = makeCar(p.color); car.spin = 0;
+        car = makeCar(p.color, this.kartModel); car.spin = 0; car.steer = 0; car.prevAim = p.aim;
+        if (this.kartModel) { const drv = this.makeDriver(p.color); if (drv) car.body.add(drv); }
         car.root.add(car.label = this.carLabel(p.name, p.color));
+        car.label.position.y = car.labelY;
         if (this.quality === 'patata') car.root.traverse(o => { if (o.isMesh) this.toLow(o); });
         car.root.position.set(p.x, p.y || 0, p.z);
         this.scene.add(car.root); this.cars.set(p.id, car);
@@ -370,7 +410,13 @@ export class Renderer {
       r.rotation.y += da * Math.min(1, dt * (car.spin ? 60 : 20));
       car.body.rotation.z = -(p.dr || 0) * 0.08;
       car.body.rotation.x = (p.y || 0) > 0.05 ? -0.12 : 0;
-      for (const w of car.wheels) w.rotation.x += (p.sp || 0) * dt / 0.42;
+      for (const w of car.wheels) w.rotation.x += (p.sp || 0) * dt / car.wheelR;
+      // ruedas delanteras y volante según lo rápido que gira el coche
+      let turnRate = p.aim - car.prevAim; turnRate = Math.atan2(Math.sin(turnRate), Math.cos(turnRate)); car.prevAim = p.aim;
+      const steerTo = car.spin || dt <= 0 ? 0 : Math.max(-0.45, Math.min(0.45, (turnRate / dt) * 0.3));
+      car.steer += (steerTo - car.steer) * Math.min(1, dt * 10);
+      for (const w of car.front) w.rotation.y = car.steer;
+      if (car.steering) car.steering.quaternion.copy(car.steering.userData.q0).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -car.steer * 2.5));
       const boost = !!(p.flags & F.DASH);
       car.flame.visible = boost;
       if (boost) { car.flame.scale.set(1, 1, 0.8 + Math.random() * 0.6); if (Math.random() < 0.6) this.burst(p.x - Math.sin(p.aim) * 2.4, 0.6, p.z - Math.cos(p.aim) * 2.4, '#ff8a1f', 2, 1.5, 1); }
@@ -378,7 +424,7 @@ export class Renderer {
       if (car.shield.visible) car.shield.material.opacity = 0.16 + Math.sin(this.clock * 8) * 0.06;
       // chispas al derrapar
       if (p.dr && Math.random() < 0.5) this.burst(p.x, 0.15, p.z, (p.dt || 0) > 1.1 ? '#ff8a1f' : (p.dt || 0) > 0.55 ? '#00e5ff' : '#ffffff', 1, 1.5, 1.5);
-      car.under.material.opacity = p.id === myId ? 0.5 : 0.3;
+      car.under.material.opacity = p.id === myId ? 0.32 : 0.2;
     }
     for (const [id, c] of this.cars) if (!seen.has(id)) { this.scene.remove(c.root); this.cars.delete(id); }
     // cajas de objetos y minas
@@ -525,18 +571,7 @@ export class Renderer {
     const root = new THREE.Group();
     const model = SkeletonUtils.clone(ch.gltf.scene);
     model.scale.setScalar(ch.scale);
-    const tune = src => {
-      const m = src.clone();
-      m.metalness = Math.min(m.metalness, 0.4);
-      m.roughness = Math.max(m.roughness, 0.35);
-      m.envMapIntensity = 0.6;
-      if (m.name === ch.cfg.tint) {
-        m.color = color.clone().multiplyScalar(0.8);
-        m.emissive = color.clone().multiplyScalar(0.35);
-      }
-      return m;
-    };
-    model.traverse(o => { if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map(tune) : tune(o.material); });
+    this.tintCharacter(model, ch, color);
     root.add(model);
 
     // cañón flotante en el hombro

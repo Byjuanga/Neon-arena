@@ -176,6 +176,7 @@ y abre http://localhost:8000
 ## Créditos
 
 - Modelo *RobotExpressive*: [Tomás Laulhé (Quaternius)](https://quaternius.com), CC0 1.0. Modificaciones de Don McCurdy.
+- Modelo del kart (`assets/models/kart.glb`): creado por Byjuanga para Neón Arena.
 - [Three.js](https://threejs.org) (MIT) para los gráficos 3D.
 - [PeerJS](https://peerjs.com) (MIT) para las conexiones online.
 - Fuentes [Orbitron](https://fonts.google.com/specimen/Orbitron) y [Rajdhani](https://fonts.google.com/specimen/Rajdhani) de Google Fonts.

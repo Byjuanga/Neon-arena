@@ -1,5 +1,11 @@
 # Historial de cambios
 
+## 1.5.1: Kart nuevo
+
+- Modelo 3D nuevo para los karts de Neón Kart, pintado del color de cada jugador y con las luces a juego.
+- El robot de cada jugador va sentado al volante.
+- Las ruedas giran con la velocidad, y las delanteras y el volante se mueven al girar.
+
 ## 1.5.0: Minijuegos de carreras
 
 - **Neón Kart**: carrera de coches de neón en un circuito nuevo con curvas, rampas, placas de turbo y

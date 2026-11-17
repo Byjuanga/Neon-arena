@@ -87,6 +87,15 @@ export const CHARACTERS = [
   },
 ];
 
+// Modelo del kart de Neón Kart. paint: material que se pinta del color del jugador; lights: luces que brillan
+// de su color; wheels/front/steering: piezas que giran; driver: posición y tamaño del robot sentado al volante.
+// Si el archivo no carga, se usa un coche sencillo hecho con cajas.
+export const KART_MODEL = {
+  url: 'assets/models/kart.glb', scale: 1.2, paint: 'Paint_White', lights: 'Light_Cyan',
+  wheels: ['Wheel_FL', 'Wheel_FR', 'Wheel_RL', 'Wheel_RR'], front: ['Wheel_FL', 'Wheel_FR'], steering: 'Steering_Wheel',
+  wheelR: 0.46, driver: { x: 0, y: 0.75, z: -0.45, size: 0.6 },
+};
+
 // Emotes con las teclas 1-6. time: segundos que dura (0 = hasta que te muevas).
 // key es el nombre de la animación en anims; si un personaje no la tiene, se queda quieto.
 export const EMOTES = [

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TRACK, TRACK_HW, trackPoint } from './race.js';
 import { COURSE } from './parkour.js';
+import { KART_MODEL } from './config.js';
 
 const glow = (c, k = 2.2) => new THREE.Color(c).multiplyScalar(k);
 function canvasTex(w, h, draw, repeat) {
@@ -82,7 +83,7 @@ export function buildKartWorld() {
   // arco de meta
   const arch = new THREE.Group();
   const postGeo = new THREE.BoxGeometry(0.6, 6, 0.6), barGeo = new THREE.BoxGeometry(TRACK_HW * 2 + 2, 0.8, 0.6);
-  const archMat = new THREE.MeshBasicMaterial({ color: glow('#ffd400', 1.8), toneMapped: false });
+  const archMat = new THREE.MeshBasicMaterial({ color: glow('#ffd400', 1.15), toneMapped: false });
   const l = new THREE.Mesh(postGeo, archMat); l.position.set(TRACK_HW + 1, 3, 0);
   const r = new THREE.Mesh(postGeo, archMat); r.position.set(-TRACK_HW - 1, 3, 0);
   const b = new THREE.Mesh(barGeo, archMat); b.position.set(0, 6, 0);
@@ -150,9 +151,41 @@ function wallStrip(lat, h) {
   return g;
 }
 
-// Coche de neón del color del jugador
-export function makeCar(color) {
+// Kart del modelo 3D, pintado del color del jugador
+function modelCar(template, c) {
+  const root = new THREE.Group(), body = new THREE.Group();
+  root.add(body);
+  const model = template.clone(true);
+  model.scale.setScalar(KART_MODEL.scale);
+  const wheels = [], front = [];
+  let steering = null;
+  model.traverse(o => {
+    if (o.isMesh) {
+      o.material = o.material.clone(); o.castShadow = true; o.material.envMapIntensity = 0.5;
+      if (o.material.name === KART_MODEL.paint) { o.material.color = c.clone().multiplyScalar(0.62); o.material.roughness = Math.max(o.material.roughness, 0.5); }
+      if (o.material.name === KART_MODEL.lights) { o.material.color = c.clone(); o.material.emissive = c.clone(); o.material.emissiveIntensity = 0.8; }
+    }
+    if (KART_MODEL.wheels.includes(o.name)) { o.rotation.order = 'YXZ'; wheels.push(o); }
+    if (KART_MODEL.front.includes(o.name)) front.push(o);
+    if (o.name === KART_MODEL.steering) { steering = o; o.userData.q0 = o.quaternion.clone(); }
+  });
+  body.add(model);
+  const under = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 3.4).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(1.2), transparent: true, opacity: 0.22, depthWrite: false, toneMapped: false }));
+  under.position.y = 0.06; root.add(under);
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.4, 8).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: glow('#ff8a1f', 2.6), toneMapped: false }));
+  flame.position.set(0, 0.7, -2.2); flame.visible = false; body.add(flame);
+  const shield = new THREE.Mesh(new THREE.SphereGeometry(2.6, 20, 14),
+    new THREE.MeshBasicMaterial({ color: '#8f5bff', transparent: true, opacity: 0.2, depthWrite: false, toneMapped: false }));
+  shield.position.y = 0.9; shield.visible = false; root.add(shield);
+  return { root, body, wheels, front, steering, flame, shield, under, wheelR: KART_MODEL.wheelR * KART_MODEL.scale, labelY: 2.9 };
+}
+
+// Coche de neón del color del jugador: el modelo 3D si está cargado y, si no, uno hecho con cajas
+export function makeCar(color, template) {
   const c = new THREE.Color(color);
+  if (template) return modelCar(template, c);
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
   const dark = new THREE.MeshStandardMaterial({ color: '#161a33', metalness: 0.7, roughness: 0.35 });
@@ -180,7 +213,7 @@ export function makeCar(color) {
   const shield = new THREE.Mesh(new THREE.SphereGeometry(2.6, 20, 14),
     new THREE.MeshBasicMaterial({ color: '#8f5bff', transparent: true, opacity: 0.2, depthWrite: false, toneMapped: false }));
   shield.position.y = 0.8; shield.visible = false; root.add(shield);
-  return { root, body, wheels, flame, shield, under };
+  return { root, body, wheels, front: [], steering: null, flame, shield, under, wheelR: 0.42, labelY: 2.4 };
 }
 
 // ---------- Carrera de Neón (parkour) ----------
