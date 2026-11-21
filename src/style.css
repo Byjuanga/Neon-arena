@@ -201,3 +201,88 @@ body.race.playing{cursor:default}
 #mini-board div.done b{color:var(--yellow)}
 body.race #chat{bottom:200px}
 body.kart #emoteHint{display:none}
+
+/* ================= Móvil y tableta ================= */
+html,body{-webkit-touch-callout:none;-webkit-user-select:none}
+#scene{touch-action:none}
+#touch{position:fixed;inset:0;z-index:4;pointer-events:none;display:none}
+body.touch.playing #touch{display:block}
+#touch .zone{position:absolute;top:56px;bottom:0;pointer-events:auto;touch-action:none}
+#zoneL{left:0;width:50%}
+#zoneR{right:0;width:50%}
+body[data-tm="kart"] #zoneR,body[data-tm="parkour"] #zoneR{display:none}
+.stick{position:fixed;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;border:2px solid #ffffff55;background:#0a0c1c66;pointer-events:none}
+.stick[hidden]{display:none}
+.stick i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px;border-radius:50%;background:#ffffffcc;box-shadow:0 0 14px var(--cyan)}
+#stickR i{box-shadow:0 0 14px var(--pink)}
+.tb{position:relative;pointer-events:auto;touch-action:none;width:64px;height:64px;border-radius:50%;border:2px solid #ffffff44;background:#0a0c1cb3;
+  color:#fff;font-size:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;-webkit-tap-highlight-color:transparent}
+.tb small{font-family:var(--display);font-size:8px;letter-spacing:.06em;margin-top:3px;opacity:.85}
+.tb.big{width:84px;height:84px;font-size:30px;border-color:var(--cyan);box-shadow:0 0 16px #00e5ff44}
+.tb.small{width:40px;height:40px;font-size:17px}
+.tb.on{background:#1d2459e6;border-color:var(--cyan);transform:scale(.94)}
+.tb[class*="m-"]{display:none}
+body[data-tm="arena"] .tb.m-arena,body[data-tm="bomb"] .tb.m-bomb,body[data-tm="kart"] .tb.m-kart,body[data-tm="parkour"] .tb.m-parkour{display:flex}
+#tbar{position:absolute;top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);margin-top:62px;display:flex;gap:8px}
+/* el primer botón queda abajo a la derecha; los demás a su izquierda y luego encima */
+#tright{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));width:170px;
+  display:flex;flex-direction:row-reverse;flex-wrap:wrap-reverse;gap:12px;align-items:center;pointer-events:none}
+#emoteMenu{position:absolute;top:120px;left:50%;transform:translateX(-50%);display:grid;grid-template-columns:repeat(6,auto);gap:8px;pointer-events:auto}
+#emoteMenu[hidden]{display:none}
+#emoteMenu .tb{display:flex;width:52px;height:52px;font-size:24px}
+#rotate{display:none;position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:6;background:#0a0c1cee;border:1px solid var(--yellow);
+  color:var(--yellow);border-radius:10px;padding:10px 14px;font-weight:700;pointer-events:none;white-space:nowrap}
+@media (orientation:portrait){body.touch.playing #rotate{display:block}}
+
+/* HUD recolocado: los pulgares van abajo, así que la información sube */
+body.touch #crosshair,body.touch #chatHint{display:none}
+body.touch #bottomleft{top:max(10px,env(safe-area-inset-top));bottom:auto;left:max(12px,env(safe-area-inset-left));width:190px;gap:4px}
+body.touch #hpbar{height:12px}
+body.touch #hpnum{font-size:18px;width:40px}
+body.touch #dash{width:110px;height:16px}
+body.touch #dash span{font-size:9px;line-height:14px}
+body.touch #powerups div{font-size:12px;padding:1px 6px}
+body.touch #killfeed{top:78px;left:max(12px,env(safe-area-inset-left));font-size:13px}
+body.touch #killfeed div:nth-child(n+4){display:none}
+body.touch #timer{font-size:20px}
+body.touch #topcenter .small{font-size:11px}
+body.touch #teamScore{font-size:18px}
+body.touch #mini-board{top:max(8px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));min-width:140px;font-size:13px;gap:2px}
+body.touch #mini-board div{padding:2px 8px}
+body.touch #mini-board div:nth-child(n+4){display:none}
+body.touch #minimap{top:104px;bottom:auto;right:max(12px,env(safe-area-inset-right));width:96px;height:96px}
+body.touch #chat{top:150px;bottom:auto;left:max(12px,env(safe-area-inset-left));width:min(360px,45vw)}
+body.touch #chat .line{font-size:14px}
+body.touch #announce{font-size:24px;top:30%}
+body.touch #action{top:46%}
+body.touch #respawn{top:30%}
+body.touch #raceHud{top:max(10px,env(safe-area-inset-top));bottom:auto;left:max(12px,env(safe-area-inset-left));gap:4px}
+body.touch #racePos{font-size:38px}
+body.touch #racePos small{font-size:16px}
+body.touch #raceInfo{font-size:13px;padding:4px 10px}
+body.touch #raceItem{padding:4px 10px}
+body.touch #raceItemIcon{font-size:24px}
+body.touch #raceItem kbd{display:none}
+body.touch #raceSpeed{font-size:12px}
+body.touch #fps{bottom:auto;top:206px}
+body.touch.race #chat{top:150px;bottom:auto}
+body.touch .panel{padding:20px}
+body.touch #scoreboard .panel{max-height:90vh;overflow:auto}
+
+/* Pantallas bajas (móvil en horizontal): menú en dos columnas y todo más compacto */
+@media (max-height:540px){
+  .screen{padding:12px max(16px,env(safe-area-inset-right)) 12px max(16px,env(safe-area-inset-left))}
+  .logo.big{font-size:42px}
+  .tag{font-size:15px;margin-top:6px}
+  .menu-left{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:28px;row-gap:10px;align-items:start}
+  .menu-left>.btns{grid-column:2;grid-row:1/span 4;align-self:center;max-width:none}
+  .field{gap:4px}
+  input:not([type]),input[type=search]{padding:9px 12px;font-size:17px}
+  .swatches button{width:28px;height:28px}
+  .btn{padding:10px 16px;font-size:13px}
+  .panel{gap:12px;padding:18px}
+  h2{font-size:20px}
+  .roomcode{font-size:34px}
+  #lobbyChatLog{height:80px}
+  .seg button{padding:6px 10px;font-size:14px;min-width:38px}
+}

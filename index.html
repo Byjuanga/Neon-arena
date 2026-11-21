@@ -2,7 +2,13 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Neón Arena">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="assets/icon.svg">
 <title>Neón Arena</title>
 <meta name="description" content="Shooter de arena en 3D en el navegador: robots de neón, bots con IA y partidas online de hasta 8 jugadores. Gratis y sin instalar.">
 <meta name="theme-color" content="#05060d">
@@ -15,20 +21,21 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="src/style.css?v=1.5.1">
+<link rel="stylesheet" href="src/style.css?v=1.6.0">
 <!-- Versión de los archivos del juego: al publicar cambios se sube este número (aquí, en style.css y en main.js)
      para que el navegador no mezcle archivos nuevos con copias antiguas guardadas -->
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
   "three/addons/": "./vendor/three/addons/",
-  "./src/config.js": "./src/config.js?v=1.5.1",
-  "./src/sim.js": "./src/sim.js?v=1.5.1",
-  "./src/render.js": "./src/render.js?v=1.5.1",
-  "./src/audio.js": "./src/audio.js?v=1.5.1",
-  "./src/race.js": "./src/race.js?v=1.5.1",
-  "./src/parkour.js": "./src/parkour.js?v=1.5.1",
-  "./src/worlds.js": "./src/worlds.js?v=1.5.1"
+  "./src/config.js": "./src/config.js?v=1.6.0",
+  "./src/sim.js": "./src/sim.js?v=1.6.0",
+  "./src/render.js": "./src/render.js?v=1.6.0",
+  "./src/audio.js": "./src/audio.js?v=1.6.0",
+  "./src/race.js": "./src/race.js?v=1.6.0",
+  "./src/parkour.js": "./src/parkour.js?v=1.6.0",
+  "./src/worlds.js": "./src/worlds.js?v=1.6.0",
+  "./src/touch.js": "./src/touch.js?v=1.6.0"
 } }
 </script>
 <script src="vendor/peerjs.min.js"></script>
@@ -50,7 +57,7 @@
   <div class="menu-wrap">
     <div class="menu-left">
       <h1 class="logo big">NEÓN<span>ARENA</span></h1>
-      <p class="tag">Duelo de robots en una arena de neón · 1 a 8 jugadores <span class="ver">v1.5.1</span></p>
+      <p class="tag">Duelo de robots en una arena de neón · 1 a 8 jugadores <span class="ver">v1.6.0</span></p>
       <div class="field">
         <label for="apodo">Apodo</label>
         <input id="apodo" type="search" maxlength="14" placeholder="Escribe tu apodo" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other">
@@ -62,6 +69,7 @@
       <div class="btns">
         <button class="btn primary" id="btnSolo">Jugar contra bots</button>
         <button class="btn accent" id="btnCreate">Crear sala online</button>
+        <button class="btn ghost" id="btnFull" hidden>⛶ Pantalla completa</button>
         <div class="join">
           <input id="code" type="search" maxlength="5" placeholder="CÓDIGO" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-form-type="other">
           <button class="btn" id="btnJoin">Unirse</button>
@@ -195,6 +203,30 @@
   <div id="crosshair"></div>
 </div>
 
+<!-- CONTROLES TÁCTILES (móvil y tableta) -->
+<div id="touch">
+  <div class="zone" id="zoneL"></div>
+  <div class="zone" id="zoneR"></div>
+  <div class="stick" id="stickL" hidden><i></i></div>
+  <div class="stick" id="stickR" hidden><i></i></div>
+  <div id="tbar">
+    <button class="tb small" data-k="pause" aria-label="Pausa">⏸</button>
+    <button class="tb small" data-k="score" aria-label="Clasificación">🏆</button>
+    <button class="tb small" data-k="chat" aria-label="Chat">💬</button>
+    <button class="tb small m-arena m-bomb m-parkour" data-k="emote" aria-label="Emotes">😀</button>
+  </div>
+  <div id="emoteMenu" hidden></div>
+  <div id="tright">
+    <button class="tb big m-parkour" data-k="jump">⤒<small>Saltar</small></button>
+    <button class="tb big m-kart" data-k="jump">↯<small>Derrape</small></button>
+    <button class="tb m-arena m-bomb m-parkour" data-k="dash">»<small>Impulso</small></button>
+    <button class="tb m-bomb" data-k="act">✋<small>Bomba</small></button>
+    <button class="tb m-kart" data-k="item">🎁<small>Objeto</small></button>
+    <button class="tb m-kart" data-k="brake">■<small>Freno</small></button>
+  </div>
+</div>
+<div id="rotate">📱 Gira el móvil para jugar en horizontal</div>
+
 <!-- CLASIFICACIÓN (Tab) -->
 <div id="scoreboard" hidden><div class="panel"><h2>Clasificación</h2><table id="scoreTable"></table></div></div>
 
@@ -229,6 +261,6 @@
 
 <div id="fps" hidden></div>
 <div id="toast"></div>
-<script type="module" src="src/main.js?v=1.5.1"></script>
+<script type="module" src="src/main.js?v=1.6.0"></script>
 </body>
 </html>

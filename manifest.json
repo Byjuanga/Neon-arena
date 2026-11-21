@@ -1,0 +1,12 @@
+{
+  "name": "Neón Arena",
+  "short_name": "Neón Arena",
+  "description": "Shooter de arena 3D con robots de neón, minijuegos de carreras y partidas online.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05060d",
+  "theme_color": "#05060d",
+  "icons": [{ "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

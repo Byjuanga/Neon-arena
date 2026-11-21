@@ -75,7 +75,9 @@ const inRange = (s, s0, len) => { const d = ((s - s0) % TRACK.L + TRACK.L) % TRA
 
 // Controles a partir del movimiento: W/S acelerar o frenar, A/D girar
 export function carControls(mx, mz) {
-  return { thr: mz < -0.2 ? 1 : mz > 0.2 ? -1 : 0, steer: mx > 0.2 ? 1 : mx < -0.2 ? -1 : 0 };
+  // con teclado mx vale ±1 (o ±0,71 en diagonal) y da giro completo; con el joystick táctil el giro es gradual
+  const steer = Math.abs(mx) > 0.15 ? Math.sign(mx) * Math.min(1, Math.abs(mx) * 1.42) : 0;
+  return { thr: mz < -0.2 ? 1 : mz > 0.2 ? -1 : 0, steer };
 }
 
 export function newCar(s, lat) {

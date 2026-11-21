@@ -6,7 +6,7 @@
 
 ### [▶ JUGAR AHORA](https://byjuanga.github.io/Neon-arena/)
 
-Gratis, sin instalar nada y sin crear cuenta. Funciona en el navegador del ordenador.
+Gratis, sin instalar nada y sin crear cuenta. Funciona en el navegador del ordenador y del móvil.
 
 ![Partida en Neón Arena](docs/img/partida.png)
 
@@ -48,6 +48,20 @@ Se puede jugar **solo contra bots** o **online con hasta 8 personas**. Basta con
 | <kbd>1</kbd> – <kbd>6</kbd> | Emotes: saludar, bailar, pulgar arriba, sí, no y sentarse (moverte los cancela) |
 | <kbd>E</kbd> | Plantar o desactivar la bomba (mantener) · Usar objeto en el kart |
 | <kbd>Esc</kbd> | Pausa y opciones |
+
+### En el móvil
+
+Los controles táctiles aparecen solos. Juega con el móvil **en horizontal**.
+
+| Modo | Mano izquierda | Mano derecha |
+|---|---|---|
+| Arena (todos, equipos, bomba) | Joystick: moverse | Joystick: apuntar y disparar (empújalo a fondo) · Impulso · ✋ bomba |
+| Kart | Joystick: girar (acelera solo) | Derrape · Objeto · Freno |
+| Parkour | Joystick: moverse | Saltar · Impulso |
+
+Arriba están los botones de pausa ⏸, clasificación 🏆, chat 💬 y emotes 😀.
+Con **Pantalla completa** (en el menú) se juega mejor; también se puede **añadir a la pantalla de inicio**
+desde el menú del navegador para abrirlo como una app.
 
 ## Modos de juego
 
@@ -164,6 +178,7 @@ y abre http://localhost:8000
 │   ├── race.js         Neón Kart: circuito, física de los coches, objetos y bots conductores
 │   ├── parkour.js      Carrera de Neón: recorrido, física de saltos y bots corredores
 │   ├── worlds.js       Gráficos de los mapas de los minijuegos y de los coches
+│   ├── touch.js        Controles táctiles para móvil y tableta
 │   ├── render.js       Gráficos 3D: arena, robots, efectos y cámara
 │   ├── config.js       Ajustes: velocidades, daño, mapa, personajes
 │   ├── audio.js        Música y efectos de sonido

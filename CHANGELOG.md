@@ -1,5 +1,16 @@
 # Historial de cambios
 
+## 1.6.0: Móvil
+
+- Controles táctiles que aparecen solos en móviles y tabletas:
+  - Arena: joystick izquierdo para moverse y derecho para apuntar y disparar (con ayuda para apuntar),
+    botón de impulso y botón ✋ para la bomba.
+  - Kart: acelera solo; joystick para girar y botones de derrape, objeto y freno.
+  - Parkour: joystick para moverse y botones de saltar e impulso.
+  - Botones de pausa, clasificación, chat y emotes.
+- HUD recolocado y más compacto en el móvil, menú en dos columnas en pantallas bajas.
+- Aviso para girar el móvil en vertical, botón de pantalla completa y opción de instalarlo como app.
+
 ## 1.5.1: Kart nuevo
 
 - Modelo 3D nuevo para los karts de Neón Kart, pintado del color de cada jugador y con las luces a juego.

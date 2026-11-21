@@ -8,6 +8,7 @@ import { Game, moveCircle, pointBlocked, F } from './sim.js';
 import { KartGame, stepCar, carControls, TRACK, KART_ITEMS } from './race.js';
 import { ParkourGame, stepRunner, newRunner, COURSE } from './parkour.js';
 import { Renderer } from './render.js';
+import { initTouch, T as touch, setTouchMode } from './touch.js';
 import { initAudio, sfx, setVolume, setMusic, startMusic, stopMusic } from './audio.js';
 
 const PREFIX = 'neonarena-v1-';
@@ -83,8 +84,8 @@ addEventListener('keydown', e => {
   }
 });
 addEventListener('keyup', e => { input.keys.delete(e.code); if (e.code === 'Tab') $('scoreboard').hidden = true; if (e.code === 'KeyE') input.act = false; if (e.code === 'Space') input.jump = false; });
-addEventListener('mousemove', e => { input.mx = e.clientX; input.my = e.clientY; const c = $('crosshair'); c.style.transform = `translate(${e.clientX}px,${e.clientY}px)`; });
-addEventListener('mousedown', e => { if (e.button === 0 && S.phase === 'playing' && !S.paused && !chatOpen && !e.target.closest('.panel')) { input.fire = true; input.tap = true; input.tapNet = true; } });
+addEventListener('mousemove', e => { if (performance.now() - touch.lastTouch > 1000) input.lastMouse = performance.now(); input.mx = e.clientX; input.my = e.clientY; const c = $('crosshair'); c.style.transform = `translate(${e.clientX}px,${e.clientY}px)`; });
+addEventListener('mousedown', e => { if (performance.now() - touch.lastTouch < 1000) return; if (e.button === 0 && S.phase === 'playing' && !S.paused && !chatOpen && !e.target.closest('.panel')) { input.fire = true; input.tap = true; input.tapNet = true; } });
 addEventListener('mouseup', e => { if (e.button === 0) input.fire = false; });
 addEventListener('contextmenu', e => { if (S.phase === 'playing') e.preventDefault(); });
 addEventListener('blur', () => { input.keys.clear(); input.fire = false; input.act = false; input.jump = false; });
@@ -94,10 +95,63 @@ function moveVec() {
   const k = input.keys;
   let x = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
   let z = (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0);
-  if (S.paused) x = z = 0;
+  if (S.paused) return [0, 0];
+  // controles táctiles (si no se está usando el teclado)
+  if (touch.on && !x && !z) {
+    const m = (view.md && view.md.m) || S.settings.mode;
+    if (m === 'kart' && S.phase === 'playing') {
+      // en el kart se acelera solo; el joystick gira y el botón (o tirar del joystick hacia abajo) frena
+      const brake = touch.brake || (touch.move && touch.move.vy > 0.75);
+      return [touch.move ? touch.move.vx : 0, brake ? 1 : -1];
+    }
+    if (touch.move && touch.move.m > 0.15) return [touch.move.vx, touch.move.vy];
+  }
   const l = Math.hypot(x, z);
   return l > 0 ? [x / l, z / l] : [0, 0];
 }
+// Apuntar con el joystick derecho: dispara al empujarlo a fondo, con una pequeña ayuda hacia el enemigo más cercano
+function touchAim(me) {
+  if (!me) return [0, 0];
+  const a = touch.aim;
+  if (a && a.m > 0.25) {
+    let ang = Math.atan2(a.vx, a.vy), best = null, bd = 26;
+    for (const p of view.players.values()) {
+      if (p.id === me.id || !p.alive || (isTeams() && p.team === me.team)) continue;
+      const d = Math.hypot(p.x - me.x, p.z - me.z);
+      if (d > bd) continue;
+      let da = Math.atan2(p.x - me.x, p.z - me.z) - ang; da = Math.atan2(Math.sin(da), Math.cos(da));
+      if (Math.abs(da) < 0.28) { bd = d; best = p; }
+    }
+    if (best) ang = Math.atan2(best.x - me.x, best.z - me.z);
+    input.aim = ang; input.fire = a.m > 0.5 && !S.paused; input.touchFire = true;
+    return [a.vx * 4, a.vy * 3];
+  }
+  if (input.touchFire) { input.fire = false; input.touchFire = false; }
+  // sin apuntar, el robot mira hacia donde camina
+  if (touch.move && touch.move.m > 0.3) input.aim = Math.atan2(touch.move.vx, touch.move.vy);
+  return [0, 0];
+}
+
+// Botones táctiles
+function touchPress(k, down) {
+  switch (k) {
+    case 'dash': if (down) { input.dash = true; input.dashNet = true; } break;
+    case 'jump': input.jump = down; break;
+    case 'act': input.act = down; if (down) { input.tap = true; input.tapNet = true; } break;
+    case 'item': if (down) { input.tap = true; input.tapNet = true; } break;
+    case 'brake': touch.brake = down; break;
+    case 'pause': if (down && S.phase === 'playing') togglePause(); break;
+    case 'chat': if (!down && S.phase === 'playing') openChat(); break; // al soltar: así el móvil deja abrir el teclado
+    case 'score': if (down) { const sb = $('scoreboard'); if (sb.hidden) renderScoreboard(); sb.hidden = !sb.hidden; } break;
+    case 'emote': if (down) $('emoteMenu').hidden = !$('emoteMenu').hidden; break;
+    default: {
+      const m = /^em(\d)$/.exec(k);
+      if (m && down) { input.em = +m[1]; input.emNet = +m[1]; $('emoteMenu').hidden = true; }
+    }
+  }
+  setTimeout(sendGuestInput, 0);
+}
+
 function updateAim(me) {
   const g = renderer.groundPoint(input.mx, input.my);
   if (g && me) {
@@ -574,6 +628,8 @@ function updateHud(dt) {
   hudT -= dt;
   const me = view.players.get(S.myId);
   const race = isRaceMode();
+  const md0 = (view.md && view.md.m) || S.settings.mode;
+  setTouchMode(S.phase !== 'playing' ? '' : md0 === 'kart' || md0 === 'parkour' || md0 === 'bomb' ? md0 : 'arena');
   document.body.classList.toggle('race', race);
   document.body.classList.toggle('kart', race && !!view.md && view.md.m === 'kart');
   $('raceHud').hidden = !race;
@@ -650,10 +706,11 @@ function updateAction(me) {
     const [st, bx, bz, carrier, , , p, by] = md.bomb;
     const inSite = SITES.some(s => Math.hypot(s.x - me.x, s.z - me.z) < BOMB.siteR);
     if (st === 'carried' && carrier === S.myId) {
-      text = inSite ? 'Mantén <kbd>E</kbd> quieto para plantar la bomba' : '💣 Llevas la bomba: ve al punto A o B';
+      const key = touch.on ? '✋' : '<kbd>E</kbd>';
+      text = inSite ? `Mantén ${key} quieto para plantar la bomba` : '💣 Llevas la bomba: ve al punto A o B';
       if (p > 0) prog = p / BOMB.plantTime;
     } else if (st === 'planted' && me.team !== md.atk && Math.hypot(bx - me.x, bz - me.z) < BOMB.useR + 0.4) {
-      text = 'Mantén <kbd>E</kbd> quieto para desactivar';
+      text = `Mantén ${touch.on ? '✋' : '<kbd>E</kbd>'} quieto para desactivar`;
       if (by === S.myId) prog = p / BOMB.defuseTime;
     }
   }
@@ -764,6 +821,7 @@ function renderScoreboard() {
 // ================== Flujo de partida ==================
 function enterGame() {
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  setTouchMode(''); $('emoteMenu').hidden = true;
   S.phase = 'playing'; S.paused = false;
   view.victory = null; view.focus = null; view.players.clear(); view.bullets = []; view.md = null;
   firstBlood = false; streak = 0; $('killfeed').innerHTML = '';
@@ -820,6 +878,7 @@ function leave(msg) {
   try { hc && hc.close(); } catch (e) {}
   try { peer && peer.destroy(); } catch (e) {}
   S.mode = null; S.phase = 'menu'; S.game = null; S.roster = []; S.paused = false;
+  setTouchMode('');
   clearChat();
   resetGuestState();
   view.players.clear(); view.bullets = []; view.victory = null; view.md = null; view.focus = { x: 0, z: 0 };
@@ -1096,6 +1155,16 @@ function wireMenus() {
     $(id).onchange = () => { prefs.fps = $(id).checked; $('showFps').checked = $('showFps2').checked = prefs.fps; $('fps').hidden = !prefs.fps; savePrefs(); };
   }
   $('fps').hidden = !prefs.fps;
+  $('emoteMenu').innerHTML = EMOTES.map((e, i) => `<button class="tb" data-k="em${i + 1}" aria-label="${e.label}">${e.icon}</button>`).join('');
+  $('btnFull').onclick = async () => {
+    try { await document.documentElement.requestFullscreen(); await screen.orientation.lock('landscape'); } catch (e) {}
+  };
+  document.addEventListener('fullscreenchange', () => { $('btnFull').hidden = !!document.fullscreenElement || !touch.on || !document.fullscreenEnabled; });
+  initTouch({
+    press: touchPress,
+    changed: () => setTimeout(sendGuestInput, 0),
+    onEnable: () => { $('btnFull').hidden = !document.fullscreenEnabled || !!document.fullscreenElement; },
+  });
   $('emoteHint').innerHTML = EMOTES.map((e, i) => `<kbd>${i + 1}</kbd>${e.icon}`).join(' ');
   $('emoteHint').title = EMOTES.map((e, i) => `${i + 1}: ${e.label}`).join(' · ');
   $('music').checked = prefs.music;
@@ -1178,7 +1247,8 @@ function frame(now) {
     if (S.mode === 'guest') guestFrame(dt);
     else if (S.game) viewFromGame();
     const me = view.players.get(S.myId);
-    const [ax, az] = isRaceMode() ? [0, 0] : updateAim(me);
+    const useTouch = touch.on && !(performance.now() - (input.lastMouse || 0) < 2000);
+    const [ax, az] = isRaceMode() ? [0, 0] : useTouch ? touchAim(me) : updateAim(me);
     if (view.victory) {
       const w = view.players.get([...view.victory][0]);
       if (w) view.focus = { x: w.x, z: w.z };
