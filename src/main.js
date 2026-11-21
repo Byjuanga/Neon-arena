@@ -123,7 +123,7 @@ function touchAim(me) {
       if (Math.abs(da) < 0.28) { bd = d; best = p; }
     }
     if (best) ang = Math.atan2(best.x - me.x, best.z - me.z);
-    input.aim = ang; input.fire = a.m > 0.5 && !S.paused; input.touchFire = true;
+    input.aim = ang; input.fire = !S.paused; input.touchFire = true; // dispara en cuanto se mueve el joystick
     return [a.vx * 4, a.vy * 3];
   }
   if (input.touchFire) { input.fire = false; input.touchFire = false; }
@@ -831,6 +831,14 @@ function enterGame() {
   document.body.classList.add('playing');
   initAudio(); startMusic();
   announce('¡A luchar!', 1200);
+  // en el móvil, recordar cómo se juega al empezar
+  if (touch.on) {
+    const m = S.settings.mode;
+    const tip = m === 'kart' ? 'Acelera solo: gira con el joystick izquierdo y derrapa con el botón ↯'
+      : m === 'parkour' ? 'Muévete con el joystick izquierdo y salta con el botón ⤒'
+      : 'Izquierda: moverte · Derecha: arrastra para apuntar y disparar';
+    setTimeout(() => toast(tip), 1300);
+  }
 }
 
 function onEnd(msg) {

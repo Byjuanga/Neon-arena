@@ -32,6 +32,7 @@ function stick(zone, key, el) {
     e.preventDefault();
     zone.setPointerCapture(e.pointerId);
     T[key] = { id: e.pointerId, x0: e.clientX, y0: e.clientY, vx: 0, vy: 0, m: 0 };
+    document.body.classList.add('stick-' + key);
     el.style.left = e.clientX + 'px'; el.style.top = e.clientY + 'px';
     knob.style.transform = '';
     el.hidden = false;
@@ -49,6 +50,7 @@ function stick(zone, key, el) {
     const s = T[key];
     if (!s || s.id !== e.pointerId) return;
     T[key] = null; el.hidden = true;
+    document.body.classList.remove('stick-' + key);
     api.changed && api.changed();
   };
   zone.addEventListener('pointerup', end);

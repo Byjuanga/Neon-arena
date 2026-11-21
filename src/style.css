@@ -215,6 +215,13 @@ body[data-tm="kart"] #zoneR,body[data-tm="parkour"] #zoneR{display:none}
 .stick[hidden]{display:none}
 .stick i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px;border-radius:50%;background:#ffffffcc;box-shadow:0 0 14px var(--cyan)}
 #stickR i{box-shadow:0 0 14px var(--pink)}
+/* joysticks en reposo: indican dónde poner los dedos; se ocultan mientras ese joystick se usa */
+.ghost{position:absolute;bottom:max(34px,env(safe-area-inset-bottom));width:112px;height:112px;border-radius:50%;border:2px dashed #ffffff40;
+  display:flex;align-items:center;justify-content:center;text-align:center;pointer-events:none}
+.ghost span{font-family:var(--display);font-size:9px;letter-spacing:.1em;color:#ffffff88;line-height:1.4}
+#ghostL{left:max(48px,env(safe-area-inset-left))}
+#ghostR{right:210px;border-color:#ff2bd655}
+body.stick-move #ghostL,body.stick-aim #ghostR{display:none}
 .tb{position:relative;pointer-events:auto;touch-action:none;width:64px;height:64px;border-radius:50%;border:2px solid #ffffff44;background:#0a0c1cb3;
   color:#fff;font-size:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;-webkit-tap-highlight-color:transparent}
 .tb small{font-family:var(--display);font-size:8px;letter-spacing:.06em;margin-top:3px;opacity:.85}
@@ -286,3 +293,8 @@ body.touch #scoreboard .panel{max-height:90vh;overflow:auto}
   #lobbyChatLog{height:80px}
   .seg button{padding:6px 10px;font-size:14px;min-width:38px}
 }
+body[data-tm="kart"] #ghostL span{font-size:0}
+body[data-tm="kart"] #ghostL span::after{content:"GIRAR";font-size:9px}
+body.touch #dash{display:flex;align-items:center}
+body.touch #dash span{line-height:1}
+body.touch #toast{bottom:auto;top:34%}
